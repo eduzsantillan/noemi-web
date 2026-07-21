@@ -1,5 +1,3 @@
-"use client";
-
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -24,7 +22,7 @@ const emergencyMessages = [
   "Denied button currently in therapy.",
 ];
 
-export default function Home() {
+export default function App() {
   const [mood, setMood] = useState<Mood>("waiting");
   const [deniedClicks, setDeniedClicks] = useState(0);
   const [noteIndex, setNoteIndex] = useState(0);
