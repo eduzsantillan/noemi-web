@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "The Kiss Form",
-  description: "A funny, animated, mobile-first kiss request form.",
+  title: "Noemi’s Kiss Form",
+  description: "A funny, animated, personalized kiss request form for Noemi.",
 };
 
 export default function RootLayout({

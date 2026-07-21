@@ -6,9 +6,15 @@ import { useEffect, useMemo, useState } from "react";
 type Mood = "waiting" | "accepted" | "denied";
 
 const blushNotes = [
-  "scientifically recommended",
+  "scientifically recommended for Noemi",
   "boyfriend approved",
   "100% refundable in more kisses",
+];
+
+const photoMemories = [
+  { src: "/noemi/noemi-1.jpg", alt: "Noemi smiling on a sunny beach", label: "beach proof" },
+  { src: "/noemi/noemi-2.jpg", alt: "Noemi glowing at night by the palms", label: "main character" },
+  { src: "/noemi/noemi-3.jpg", alt: "Noemi in a sweet palm-tree selfie", label: "kiss evidence" },
 ];
 
 const emergencyMessages = [
@@ -66,7 +72,7 @@ export default function Home() {
       <section className="proposal-card" aria-labelledby="kiss-title">
         <div className="status-pill">
           <span className="live-dot" />
-          urgent girlfriend questionnaire
+          Noemi-only questionnaire
         </div>
 
         <div className="face-wrap" aria-hidden="true">
@@ -77,26 +83,39 @@ export default function Home() {
           <div className="kiss-face">😘</div>
         </div>
 
-        <p className="eyebrow">Hey beautiful, quick question...</p>
+        <p className="eyebrow">Noemi, beautiful, quick question...</p>
         <h1 id="kiss-title">Do you want a kiss?</h1>
         <p className="subtitle">
-          Please answer carefully. This form is highly official, extremely romantic,
-          and <strong>{blushNotes[noteIndex]}</strong>.
+          Please answer carefully. This form was custom-built for <strong>Noemi</strong>,
+          is highly official, extremely romantic, and <strong>{blushNotes[noteIndex]}</strong>.
         </p>
+
+        <div className="photo-stack" aria-label="Favorite Noemi memories">
+          {photoMemories.map((photo, index) => (
+            <figure
+              className="polaroid"
+              key={photo.src}
+              style={{ "--p": index } as CSSProperties}
+            >
+              <img src={photo.src} alt={photo.alt} />
+              <figcaption>{photo.label}</figcaption>
+            </figure>
+          ))}
+        </div>
 
         <div className="answer-zone" aria-live="polite">
           {mood === "accepted" ? (
             <div className="result-card success">
               <span className="result-icon">💋</span>
               <h2>Correct answer!</h2>
-              <p>Processing one premium kiss with extra hugs. Delivery: immediately.</p>
+              <p>Noemi selected happiness. Processing one premium kiss with extra hugs. Delivery: immediately.</p>
             </div>
           ) : mood === "denied" ? (
             <div className="result-card warning">
               <span className="broken-earth">🌎💔</span>
               <h2>System error detected</h2>
               <p>
-                The “Denied” option broke Earth a little. Don&apos;t worry, the Accept
+                Noemi, the “Denied” option broke Earth a little. Don&apos;t worry, the Accept
                 button can still save the planet.
               </p>
             </div>
@@ -104,7 +123,7 @@ export default function Home() {
             <div className="result-card soft">
               <span className="result-icon">📝</span>
               <h2>Choose wisely</h2>
-              <p>There is definitely a right answer. No pressure. Okay, tiny pressure.</p>
+              <p>Noemi, there is definitely a right answer. No pressure. Okay, tiny pressure.</p>
             </div>
           )}
         </div>
@@ -126,8 +145,8 @@ export default function Home() {
         </div>
 
         <p className="fine-print">
-          By tapping Accept you agree to unlimited smiles, surprise forehead kisses,
-          and a suspicious amount of cuddles.
+          By tapping Accept, Noemi agrees to unlimited smiles, surprise forehead kisses,
+          a suspicious amount of cuddles, and one boyfriend doing a victory dance.
         </p>
       </section>
     </main>

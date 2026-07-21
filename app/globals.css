@@ -51,6 +51,7 @@ button {
   padding: 20px;
   background:
     radial-gradient(circle at 50% -10%, rgba(255, 255, 255, 0.95), transparent 34%),
+    radial-gradient(circle at 50% 55%, rgba(255, 31, 114, 0.12), transparent 30%),
     radial-gradient(circle at 15% 20%, rgba(255, 141, 187, 0.45), transparent 32%),
     radial-gradient(circle at 90% 12%, rgba(149, 243, 221, 0.34), transparent 28%),
     linear-gradient(145deg, #fff7fb 0%, #ffe3ef 45%, #f6e8ff 100%);
@@ -260,9 +261,73 @@ h1 {
   white-space: nowrap;
 }
 
+
+.photo-stack {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 20px auto 4px;
+  padding: 8px;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.46);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.polaroid {
+  position: relative;
+  min-width: 0;
+  margin: 0;
+  padding: 7px 7px 22px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff, #fff7fb);
+  box-shadow: 0 14px 28px rgba(91, 33, 71, 0.14);
+  transform: rotate(calc((var(--p) - 1) * 4deg)) translateY(calc(var(--p) * -2px));
+  animation: photo-float calc(3.8s + var(--p) * 0.3s) ease-in-out infinite;
+  animation-delay: calc(var(--p) * -0.45s);
+}
+
+.polaroid::after {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  width: 42px;
+  height: 18px;
+  border-radius: 999px;
+  content: "";
+  background: rgba(255, 242, 166, 0.78);
+  box-shadow: 0 5px 14px rgba(91, 33, 71, 0.08);
+  transform: translateX(-50%) rotate(calc((var(--p) - 1) * -5deg));
+}
+
+.polaroid img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1.08;
+  object-fit: cover;
+  border-radius: 13px;
+  filter: saturate(1.08) contrast(1.03);
+}
+
+.polaroid figcaption {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  left: 6px;
+  overflow: hidden;
+  color: rgba(91, 33, 71, 0.7);
+  font-size: clamp(0.56rem, 2.2vw, 0.72rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .answer-zone {
   min-height: 156px;
-  margin: 22px 0 18px;
+  margin: 18px 0 18px;
 }
 
 .result-card {
@@ -428,6 +493,17 @@ h1 {
 }
 
 @media (min-width: 640px) {
+  .photo-stack {
+    gap: 12px;
+    padding: 11px;
+    margin-top: 24px;
+  }
+
+  .polaroid {
+    padding: 9px 9px 27px;
+    border-radius: 22px;
+  }
+
   .proposal-card {
     width: min(100%, 620px);
     padding: 38px;
@@ -438,7 +514,71 @@ h1 {
     grid-template-columns: 1.08fr 0.92fr;
   }
 
-  .answer-zone {
+  
+.photo-stack {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 20px auto 4px;
+  padding: 8px;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.46);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.polaroid {
+  position: relative;
+  min-width: 0;
+  margin: 0;
+  padding: 7px 7px 22px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff, #fff7fb);
+  box-shadow: 0 14px 28px rgba(91, 33, 71, 0.14);
+  transform: rotate(calc((var(--p) - 1) * 4deg)) translateY(calc(var(--p) * -2px));
+  animation: photo-float calc(3.8s + var(--p) * 0.3s) ease-in-out infinite;
+  animation-delay: calc(var(--p) * -0.45s);
+}
+
+.polaroid::after {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  width: 42px;
+  height: 18px;
+  border-radius: 999px;
+  content: "";
+  background: rgba(255, 242, 166, 0.78);
+  box-shadow: 0 5px 14px rgba(91, 33, 71, 0.08);
+  transform: translateX(-50%) rotate(calc((var(--p) - 1) * -5deg));
+}
+
+.polaroid img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1.08;
+  object-fit: cover;
+  border-radius: 13px;
+  filter: saturate(1.08) contrast(1.03);
+}
+
+.polaroid figcaption {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  left: 6px;
+  overflow: hidden;
+  color: rgba(91, 33, 71, 0.7);
+  font-size: clamp(0.56rem, 2.2vw, 0.72rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.answer-zone {
     min-height: 148px;
   }
 }
@@ -492,6 +632,15 @@ h1 {
 @keyframes orbit-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes photo-float {
+  0%, 100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -7px;
   }
 }
 
