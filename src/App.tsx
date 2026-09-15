@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const BIRTHDAY_TARGET = new Date("2026-11-20T00:00:00-05:00");
 const SECRET_DATE_LABEL = "20 de noviembre";
@@ -59,11 +59,11 @@ export default function App() {
   const [countdown, setCountdown] = useState(getCountdown);
   const [choice, setChoice] = useState<Choice | null>(null);
   const [choiceLoading, setChoiceLoading] = useState(true);
-  const [apiReady, setApiReady] = useState<boolean | null>(null);
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
   const [passphrase, setPassphrase] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const destinationRef = useRef<HTMLElement | null>(null);
 
   const confetti = useMemo(() => Array.from({ length: 44 }, (_, index) => index), []);
   const balloons = useMemo(() => Array.from({ length: 18 }, (_, index) => index), []);
@@ -83,12 +83,10 @@ export default function App() {
         const data = (await response.json()) as { choice: Choice | null };
         if (!cancelled) {
           setChoice(data.choice);
-          setApiReady(true);
         }
       } catch {
         if (!cancelled) {
-          setApiReady(false);
-          setMessage("Modo vista: inicia la API local para guardar la elección en PostgreSQL.");
+          setMessage("La elección se podrá guardar cuando el servidor local esté activo.");
         }
       } finally {
         if (!cancelled) setChoiceLoading(false);
@@ -143,20 +141,24 @@ export default function App() {
       }
 
       setChoice(data.choice);
-      setApiReady(true);
       setSelectedDestination(null);
       setPassphrase("");
       setMessage(`${data.choice.destination} quedó guardado. Decisión sellada.`);
     } catch {
-      setApiReady(false);
-      setMessage("No pude guardar. Levanta la API local con `npm run dev` y PostgreSQL activo.");
+      setMessage("No pude guardar todavía. Revisa que la app local esté corriendo completa.");
     } finally {
       setSaving(false);
     }
   }
 
+  function scrollToDestinations() {
+    destinationRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <main className="birthday-page">
+      <div className="silk silk-one" />
+      <div className="silk silk-two" />
       {countdown.isBirthday && (
         <div className="party-layer" aria-hidden="true">
           {confetti.map((piece) => (
@@ -189,14 +191,21 @@ export default function App() {
       <section className="hero" aria-labelledby="birthday-title">
         <div className="intro">
           <p className="kicker">Noemi · {SECRET_DATE_LABEL}</p>
-          <h1 id="birthday-title">Una escapada para celebrar tu día.</h1>
+          <h1 id="birthday-title">Una escapada para Noemi.</h1>
           <p className="intro-copy">
-            Cuenta regresiva para tu cumpleaños. Cuando llegue el día, esta página se convierte en una pequeña fiesta.
+            Una invitación elegante para elegir el próximo recuerdo. El 20 de noviembre, la página despierta con confetti y globos.
           </p>
+          <button className="primary-link" type="button" onClick={scrollToDestinations}>
+            Ver destinos
+          </button>
         </div>
 
-        <div className="portrait-card">
-          <img src={photos[0].src} alt={photos[0].alt} />
+        <div className="portrait-stage" aria-label="Foto principal de Noemi">
+          <div className="portrait-halo" />
+          <div className="portrait-card">
+            <img src={photos[0].src} alt={photos[0].alt} />
+          </div>
+          <p className="portrait-caption">Birthday trip selection</p>
         </div>
       </section>
 
@@ -207,7 +216,7 @@ export default function App() {
             <div>
               <p className="kicker">Hoy</p>
               <h2>Feliz cumpleaños, Noemi.</h2>
-              <p>Que empiece la lluvia de globos, confetti y planes bonitos.</p>
+              <p>Hoy empieza la celebración.</p>
             </div>
           </div>
         ) : (
@@ -220,35 +229,26 @@ export default function App() {
         )}
       </section>
 
-      <section className="gallery" aria-label="Momentos de Noemi">
+      <section className="gallery reveal-block" aria-label="Momentos de Noemi">
         {photos.slice(1).map((photo) => (
           <img key={photo.src} src={photo.src} alt={photo.alt} />
         ))}
       </section>
 
-      <section className="destinations" aria-labelledby="destination-title">
+      <section className="destinations reveal-block" aria-labelledby="destination-title" ref={destinationRef}>
         <div className="section-heading">
           <p className="kicker">El regalo</p>
           <h2 id="destination-title">Escoge tu destino.</h2>
           <p>
-            Una sola elección. Se confirma con clave y queda guardada en PostgreSQL.
+            Una sola elección, confirmada con clave. Después queda sellada.
           </p>
-        </div>
-
-        <div className="db-status" data-ready={apiReady === true}>
-          <span />
-          {choiceLoading
-            ? "Revisando elección guardada"
-            : apiReady
-              ? "PostgreSQL conectado"
-              : "API local desconectada"}
         </div>
 
         {choice && lockedDestination && (
           <div className="selected-panel">
             <span>{lockedDestination.emoji}</span>
             <div>
-              <p>Destino sellado</p>
+              <p>Elección sellada</p>
               <strong>{lockedDestination.name}</strong>
             </div>
           </div>
@@ -270,7 +270,7 @@ export default function App() {
                 <span className="destination-emoji">{destination.emoji}</span>
                 <span className="destination-name">{destination.name}</span>
                 <span className="destination-line">{destination.line}</span>
-                <span className="destination-action">{isWinner ? "Elegido" : isLocked ? "Bloqueado" : "Elegir"}</span>
+                <span className="destination-action">{isWinner ? "Sellado" : isLocked ? "Cerrado" : "Elegir"}</span>
               </button>
             );
           })}
@@ -285,7 +285,7 @@ export default function App() {
             <button className="modal-close" onClick={closeConfirmation} type="button" aria-label="Cerrar">×</button>
             <p className="kicker">Confirmar elección</p>
             <h2 id="confirm-title">{selectedDestination.name}</h2>
-            <p>Escribe la clave para guardar este destino. Después no se puede cambiar.</p>
+            <p>Escribe la clave para sellar este destino. Después no se puede cambiar.</p>
             <label htmlFor="secret-code">Clave</label>
             <input
               autoFocus

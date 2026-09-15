@@ -95,4 +95,10 @@ Si ves un proceso viejo de esta misma app, ciérralo y vuelve a correr:
 npm run dev
 ```
 
+También puedes limpiar procesos viejos de esta app con:
+
+```bash
+npm run stop:dev
+```
+
 La página puede verse en modo visual sin API, pero para guardar el destino necesita la API local y PostgreSQL activos.

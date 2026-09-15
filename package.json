@@ -9,7 +9,9 @@
     "dev:api": "node --watch server/index.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "start": "node server/index.mjs"
+    "start": "node server/index.mjs",
+    "predev": "node scripts/free-dev-ports.mjs",
+    "stop:dev": "node scripts/free-dev-ports.mjs"
   },
   "dependencies": {
     "pg": "8.16.3",
