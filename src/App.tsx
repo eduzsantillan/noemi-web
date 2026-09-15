@@ -151,20 +151,20 @@ const copy: Record<Language, PageCopy> = {
       title: "Leave Noemi a birthday note.",
       intro:
         "A private little wall for sweet messages, inside jokes, wishes, and tiny pieces of love before her birthday arrives.",
-      formKicker: "Add yours",
-      nameLabel: "Your name",
-      namePlaceholder: "Friend, cousin, accomplice…",
-      messageLabel: "Your note",
-      messagePlaceholder: "Write something that will make her smile.",
-      photoLabel: "Add a photo",
+      formKicker: "New note",
+      nameLabel: "Name",
+      namePlaceholder: "Your name",
+      messageLabel: "Message",
+      messagePlaceholder: "For Noemi…",
+      photoLabel: "Photo",
       photoHint: "Optional — long or heavy photos are cropped and compressed for the note.",
-      photoButton: "Choose photo",
+      photoButton: "Add photo",
       removePhoto: "Remove photo",
-      submit: "Place on the mural",
+      submit: "Post note",
       saving: "Placing",
       boardKicker: "The mural",
-      boardTitle: "Notes waiting for Noemi.",
-      boardText: "Every message becomes a little card on her birthday wall.",
+      boardTitle: "Noemi’s mural",
+      boardText: "",
       emptyTitle: "The first note is waiting.",
       emptyText: "Be the first person to leave Noemi a birthday wish.",
       loadError: "The mural will appear once the local app is running.",
@@ -172,7 +172,7 @@ const copy: Record<Language, PageCopy> = {
       moveError: "That spot is too crowded — try beside it.",
       photoError: "That photo is too large for one note. Try a smaller image.",
       saved: "Your note is on the mural.",
-      dragHint: "Drag the notes gently. They keep a little personal space.",
+      dragHint: "",
       characterCount: (count) => `${count}/500`,
       noteDate: (date) =>
         date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
@@ -226,20 +226,20 @@ const copy: Record<Language, PageCopy> = {
       title: "Déjale una nota de cumpleaños a Noemi.",
       intro:
         "Un murito privado para mensajes lindos, chistes internos, deseos y pedacitos de cariño antes de que llegue su cumpleaños.",
-      formKicker: "Agrega el tuyo",
-      nameLabel: "Tu nombre",
-      namePlaceholder: "Amiga, primo, cómplice…",
-      messageLabel: "Tu nota",
-      messagePlaceholder: "Escribe algo que le saque una sonrisa.",
-      photoLabel: "Agrega una foto",
+      formKicker: "Nueva nota",
+      nameLabel: "Nombre",
+      namePlaceholder: "Tu nombre",
+      messageLabel: "Mensaje",
+      messagePlaceholder: "Para Noemi…",
+      photoLabel: "Foto",
       photoHint: "Opcional — las fotos largas o pesadas se recortan y comprimen solas.",
-      photoButton: "Escoger foto",
+      photoButton: "Agregar foto",
       removePhoto: "Quitar foto",
-      submit: "Poner en el mural",
+      submit: "Publicar",
       saving: "Poniendo",
       boardKicker: "El mural",
-      boardTitle: "Notas esperando a Noemi.",
-      boardText: "Cada mensaje se convierte en una tarjetita en su pared de cumpleaños.",
+      boardTitle: "Mural de Noemi",
+      boardText: "",
       emptyTitle: "La primera nota está esperando.",
       emptyText: "Sé la primera persona en dejarle un deseo a Noemi.",
       loadError: "El mural aparecerá cuando la app local esté corriendo.",
@@ -247,7 +247,7 @@ const copy: Record<Language, PageCopy> = {
       moveError: "Ese espacio está muy lleno — prueba al costado.",
       photoError: "Esa foto pesa demasiado para una nota. Prueba una imagen más pequeña.",
       saved: "Tu nota ya está en el mural.",
-      dragHint: "Arrastra las notas suavecito. Cada una conserva su propio espacio.",
+      dragHint: "",
       characterCount: (count) => `${count}/500`,
       noteDate: (date) =>
         date.toLocaleDateString("es-PE", { month: "short", day: "numeric" }),
@@ -848,8 +848,8 @@ function MuralPage({
           <div className="mural-board-intro">
             <p className="kicker">{muralCopy.boardKicker}</p>
             <h1 id="notes-title">{muralCopy.boardTitle}</h1>
-            <p>{muralCopy.boardText}</p>
-            <p className="drag-hint">{muralCopy.dragHint}</p>
+            {muralCopy.boardText && <p>{muralCopy.boardText}</p>}
+            {muralCopy.dragHint && <p className="drag-hint">{muralCopy.dragHint}</p>}
           </div>
 
           <form className="note-form mural-composer" onSubmit={submitNote}>
@@ -876,8 +876,7 @@ function MuralPage({
 
             <div className="photo-picker compact-photo-picker">
               <div>
-                <label>{muralCopy.photoLabel}</label>
-                <p>{muralCopy.photoHint}</p>
+                <span className="photo-label">{muralCopy.photoLabel}</span>
               </div>
               <input
                 accept="image/*"
@@ -902,7 +901,7 @@ function MuralPage({
             )}
 
             <div className="form-footer">
-              <span>{muralCopy.characterCount(note.length)}</span>
+              {note.length > 420 && <span className="character-counter">{muralCopy.characterCount(note.length)}</span>}
               <button className="confirm-button" disabled={saving || !author.trim() || !note.trim()} type="submit">
                 {saving ? `${muralCopy.saving}…` : muralCopy.submit}
               </button>
