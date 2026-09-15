@@ -79,3 +79,20 @@ psql postgres://localhost:5432/noemi_birthday -c "DELETE FROM birthday_destinati
 - `server/index.mjs` — API mínima para PostgreSQL.
 - `db/schema.sql` — tabla de elección irreversible.
 - `public/birthday/` — fotos optimizadas de Noemi.
+
+## Si la página no carga
+
+Verifica que no haya procesos viejos usando los puertos locales:
+
+```bash
+lsof -nP -iTCP:4311 -sTCP:LISTEN
+lsof -nP -iTCP:5174 -sTCP:LISTEN
+```
+
+Si ves un proceso viejo de esta misma app, ciérralo y vuelve a correr:
+
+```bash
+npm run dev
+```
+
+La página puede verse en modo visual sin API, pero para guardar el destino necesita la API local y PostgreSQL activos.

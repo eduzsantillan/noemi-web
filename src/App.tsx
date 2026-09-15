@@ -7,8 +7,7 @@ const SECRET_DATE_LABEL = "20 de noviembre";
 type Destination = {
   name: string;
   emoji: string;
-  vibe: string;
-  detail: string;
+  line: string;
 };
 
 type Choice = {
@@ -25,50 +24,19 @@ type CountdownParts = {
 };
 
 const destinations: Destination[] = [
-  {
-    name: "Cancun",
-    emoji: "🌊",
-    vibe: "turquesa, sol y besitos",
-    detail: "Para despertar con mar azul y planes que empiezan con: ‘solo una foto más’. ",
-  },
-  {
-    name: "Playa del Carmen",
-    emoji: "🌴",
-    vibe: "boho, playa y cena bonita",
-    detail: "Para caminar de la mano, comer rico y fingir que no vamos por otro postre.",
-  },
-  {
-    name: "Punta cana",
-    emoji: "🍹",
-    vibe: "todo incluido y cero estrés",
-    detail: "Para que Noemi solo se preocupe por elegir outfit, piscina o playa.",
-  },
-  {
-    name: "Puerto Rico",
-    emoji: "✨",
-    vibe: "calor, música y aventura",
-    detail: "Para perderse en calles lindas, bailar un poquito y volver con mil recuerdos.",
-  },
-  {
-    name: "Madrid",
-    emoji: "🏰",
-    vibe: "elegante, tapas y fotitos",
-    detail: "Para un cumpleaños europeo con cafés bonitos y besos en cada esquina.",
-  },
-  {
-    name: "Panama",
-    emoji: "🌆",
-    vibe: "skyline, rooftop y escapada",
-    detail: "Para mezclar ciudad, playa y una celebración con mood de película.",
-  },
+  { name: "Cancun", emoji: "🌊", line: "Mar turquesa, sol y descanso." },
+  { name: "Playa del Carmen", emoji: "🌴", line: "Caminatas lindas, playa y cena bonita." },
+  { name: "Punta cana", emoji: "🍹", line: "Todo incluido y cero estrés." },
+  { name: "Puerto Rico", emoji: "✨", line: "Calor, música y aventura." },
+  { name: "Madrid", emoji: "🏛️", line: "Cafés, tapas y cumpleaños europeo." },
+  { name: "Panama", emoji: "🌆", line: "Ciudad, rooftop y escapada perfecta." },
 ];
 
 const photos = [
-  { src: "/birthday/noemi-birthday-1.jpg", alt: "Noemi sonriendo de viaje" },
-  { src: "/birthday/noemi-birthday-2.jpg", alt: "Noemi disfrutando una vista colorida" },
-  { src: "/birthday/noemi-birthday-3.jpg", alt: "Noemi posando en una vista soleada" },
-  { src: "/birthday/noemi-birthday-4.jpg", alt: "Noemi enviando un beso en una cena" },
   { src: "/birthday/noemi-birthday-5.jpg", alt: "Noemi junto a la piscina" },
+  { src: "/birthday/noemi-birthday-4.jpg", alt: "Noemi en una cena" },
+  { src: "/birthday/noemi-birthday-1.jpg", alt: "Noemi de viaje" },
+  { src: "/birthday/noemi-birthday-3.jpg", alt: "Noemi disfrutando una vista soleada" },
 ];
 
 function getCountdown(): CountdownParts {
@@ -91,13 +59,14 @@ export default function App() {
   const [countdown, setCountdown] = useState(getCountdown);
   const [choice, setChoice] = useState<Choice | null>(null);
   const [choiceLoading, setChoiceLoading] = useState(true);
+  const [apiReady, setApiReady] = useState<boolean | null>(null);
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
   const [passphrase, setPassphrase] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
-  const celebrationPieces = useMemo(() => Array.from({ length: 56 }, (_, index) => index), []);
-  const balloonPieces = useMemo(() => Array.from({ length: 24 }, (_, index) => index), []);
+  const confetti = useMemo(() => Array.from({ length: 44 }, (_, index) => index), []);
+  const balloons = useMemo(() => Array.from({ length: 18 }, (_, index) => index), []);
 
   useEffect(() => {
     const timer = window.setInterval(() => setCountdown(getCountdown()), 1000);
@@ -110,12 +79,16 @@ export default function App() {
     async function loadChoice() {
       try {
         const response = await fetch("/api/choice");
-        if (!response.ok) throw new Error("No se pudo leer la elección guardada.");
+        if (!response.ok) throw new Error("No se pudo leer la elección.");
         const data = (await response.json()) as { choice: Choice | null };
-        if (!cancelled) setChoice(data.choice);
+        if (!cancelled) {
+          setChoice(data.choice);
+          setApiReady(true);
+        }
       } catch {
         if (!cancelled) {
-          setMessage("Aún no pude conectar con la base de datos local. Revisa que el servidor API y PostgreSQL estén corriendo.");
+          setApiReady(false);
+          setMessage("Modo vista: inicia la API local para guardar la elección en PostgreSQL.");
         }
       } finally {
         if (!cancelled) setChoiceLoading(false);
@@ -170,11 +143,13 @@ export default function App() {
       }
 
       setChoice(data.choice);
+      setApiReady(true);
       setSelectedDestination(null);
       setPassphrase("");
-      setMessage(`Destino sellado: ${data.choice.destination}. Ya no hay vuelta atrás 💌`);
+      setMessage(`${data.choice.destination} quedó guardado. Decisión sellada.`);
     } catch {
-      setMessage("No pude guardar en PostgreSQL. Confirma que `npm run dev` y tu base local estén activos.");
+      setApiReady(false);
+      setMessage("No pude guardar. Levanta la API local con `npm run dev` y PostgreSQL activo.");
     } finally {
       setSaving(false);
     }
@@ -182,87 +157,102 @@ export default function App() {
 
   return (
     <main className="birthday-page">
-      <div className="ambient ambient-one" />
-      <div className="ambient ambient-two" />
-      <div className="ambient ambient-three" />
-
       {countdown.isBirthday && (
         <div className="party-layer" aria-hidden="true">
-          {celebrationPieces.map((piece) => (
-            <span className="confetti" key={`confetti-${piece}`} style={{ "--i": piece, "--left": `${(piece * 19) % 100}%`, "--drift": `${((piece % 9) - 4) * 18}px` } as CSSProperties} />
+          {confetti.map((piece) => (
+            <span
+              className="confetti"
+              key={`confetti-${piece}`}
+              style={{
+                "--i": piece,
+                "--left": `${(piece * 23) % 100}%`,
+                "--drift": `${((piece % 9) - 4) * 16}px`,
+              } as CSSProperties}
+            />
           ))}
-          {balloonPieces.map((balloon) => (
-            <span className="balloon" key={`balloon-${balloon}`} style={{ "--i": balloon, "--left": `${(balloon * 37) % 100}%`, "--drift": `${((balloon % 7) - 3) * 24}px` } as CSSProperties}>
-              {balloon % 4 === 0 ? "🎈" : balloon % 4 === 1 ? "🎀" : balloon % 4 === 2 ? "💖" : "✨"}
+          {balloons.map((balloon) => (
+            <span
+              className="balloon"
+              key={`balloon-${balloon}`}
+              style={{
+                "--i": balloon,
+                "--left": `${(balloon * 41) % 100}%`,
+                "--drift": `${((balloon % 7) - 3) * 22}px`,
+              } as CSSProperties}
+            >
+              🎈
             </span>
           ))}
         </div>
       )}
 
-      <section className="hero-section" aria-labelledby="birthday-title">
-        <div className="badge"><span /> misión cumpleaños de Noemi</div>
-
-        <div className="hero-grid">
-          <div className="hero-copy">
-            <p className="eyebrow">Cuenta regresiva oficial</p>
-            <h1 id="birthday-title">
-              Noemi, tu cumpleaños está cargando...
-            </h1>
-            <p className="hero-text">
-              El {SECRET_DATE_LABEL} esta página desbloquea modo fiesta: confetti,
-              lluvia de globos y una celebración con nivel “diseñador de renombre”.
-            </p>
-          </div>
-
-          <div className="photo-cloud" aria-label="Fotos de Noemi">
-            {photos.map((photo, index) => (
-              <figure className="memory-card" key={photo.src} style={{ "--p": index } as CSSProperties}>
-                <img src={photo.src} alt={photo.alt} />
-              </figure>
-            ))}
-          </div>
-        </div>
-
-        <div className={`countdown-card ${countdown.isBirthday ? "birthday-mode" : ""}`}>
-          {countdown.isBirthday ? (
-            <div className="birthday-reveal">
-              <span className="mega-emoji">🎂</span>
-              <h2>¡Feliz cumpleaños, Noemi!</h2>
-              <p>Hoy el universo tiene una orden: celebrar a la más hermosa.</p>
-            </div>
-          ) : (
-            <div className="countdown-grid" aria-label={`Faltan ${countdown.days} días para el cumpleaños de Noemi`}>
-              <TimeBox label="días" value={countdown.days} />
-              <TimeBox label="horas" value={countdown.hours} />
-              <TimeBox label="min" value={countdown.minutes} />
-              <TimeBox label="seg" value={countdown.seconds} />
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="destinations-section" aria-labelledby="destination-title">
-        <div className="section-heading">
-          <p className="eyebrow">El gran regalo</p>
-          <h2 id="destination-title">Escoge tu destino, mi amor</h2>
-          <p>
-            La elección se guarda en PostgreSQL y queda bloqueada para siempre.
-            Cero arrepentimientos, solo maletas y emoción.
+      <section className="hero" aria-labelledby="birthday-title">
+        <div className="intro">
+          <p className="kicker">Noemi · {SECRET_DATE_LABEL}</p>
+          <h1 id="birthday-title">Una escapada para celebrar tu día.</h1>
+          <p className="intro-copy">
+            Cuenta regresiva para tu cumpleaños. Cuando llegue el día, esta página se convierte en una pequeña fiesta.
           </p>
         </div>
 
-        {choiceLoading ? (
-          <div className="locked-panel loading-panel">Consultando el destino secreto...</div>
-        ) : choice && lockedDestination ? (
-          <div className="locked-panel selected-panel">
-            <span className="selected-emoji">{lockedDestination.emoji}</span>
+        <div className="portrait-card">
+          <img src={photos[0].src} alt={photos[0].alt} />
+        </div>
+      </section>
+
+      <section className="countdown-section" aria-label="Cuenta regresiva">
+        {countdown.isBirthday ? (
+          <div className="birthday-note">
+            <span>🎂</span>
             <div>
-              <p className="locked-label">Destino elegido y sellado</p>
-              <h3>{lockedDestination.name}</h3>
-              <p>{lockedDestination.vibe}</p>
+              <p className="kicker">Hoy</p>
+              <h2>Feliz cumpleaños, Noemi.</h2>
+              <p>Que empiece la lluvia de globos, confetti y planes bonitos.</p>
             </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="countdown-grid">
+            <TimeBox label="días" value={countdown.days} />
+            <TimeBox label="horas" value={countdown.hours} />
+            <TimeBox label="min" value={countdown.minutes} />
+            <TimeBox label="seg" value={countdown.seconds} />
+          </div>
+        )}
+      </section>
+
+      <section className="gallery" aria-label="Momentos de Noemi">
+        {photos.slice(1).map((photo) => (
+          <img key={photo.src} src={photo.src} alt={photo.alt} />
+        ))}
+      </section>
+
+      <section className="destinations" aria-labelledby="destination-title">
+        <div className="section-heading">
+          <p className="kicker">El regalo</p>
+          <h2 id="destination-title">Escoge tu destino.</h2>
+          <p>
+            Una sola elección. Se confirma con clave y queda guardada en PostgreSQL.
+          </p>
+        </div>
+
+        <div className="db-status" data-ready={apiReady === true}>
+          <span />
+          {choiceLoading
+            ? "Revisando elección guardada"
+            : apiReady
+              ? "PostgreSQL conectado"
+              : "API local desconectada"}
+        </div>
+
+        {choice && lockedDestination && (
+          <div className="selected-panel">
+            <span>{lockedDestination.emoji}</span>
+            <div>
+              <p>Destino sellado</p>
+              <strong>{lockedDestination.name}</strong>
+            </div>
+          </div>
+        )}
 
         <div className="destination-grid">
           {destinations.map((destination) => {
@@ -279,9 +269,8 @@ export default function App() {
               >
                 <span className="destination-emoji">{destination.emoji}</span>
                 <span className="destination-name">{destination.name}</span>
-                <span className="destination-vibe">{destination.vibe}</span>
-                <span className="destination-detail">{destination.detail}</span>
-                <span className="destination-action">{isWinner ? "Elegido 🔒" : isLocked ? "Bloqueado" : "Seleccionar"}</span>
+                <span className="destination-line">{destination.line}</span>
+                <span className="destination-action">{isWinner ? "Elegido" : isLocked ? "Bloqueado" : "Elegir"}</span>
               </button>
             );
           })}
@@ -293,15 +282,11 @@ export default function App() {
       {selectedDestination && (
         <div className="modal-backdrop" role="presentation">
           <section className="confirm-modal" aria-labelledby="confirm-title" role="dialog" aria-modal="true">
-            <button className="modal-close" onClick={closeConfirmation} type="button" aria-label="Cerrar confirmación">×</button>
-            <span className="modal-emoji">{selectedDestination.emoji}</span>
-            <p className="eyebrow">Confirmación ultra secreta</p>
-            <h2 id="confirm-title">¿Sellamos {selectedDestination.name}?</h2>
-            <p>
-              Para confirmar, escribe la clave que solo el team amor conoce.
-              Después de guardar, no se puede cambiar.
-            </p>
-            <label className="secret-label" htmlFor="secret-code">Clave</label>
+            <button className="modal-close" onClick={closeConfirmation} type="button" aria-label="Cerrar">×</button>
+            <p className="kicker">Confirmar elección</p>
+            <h2 id="confirm-title">{selectedDestination.name}</h2>
+            <p>Escribe la clave para guardar este destino. Después no se puede cambiar.</p>
+            <label htmlFor="secret-code">Clave</label>
             <input
               autoFocus
               id="secret-code"
@@ -309,12 +294,12 @@ export default function App() {
               onKeyDown={(event) => {
                 if (event.key === "Enter") void confirmDestination();
               }}
-              placeholder="Escribe la clave"
+              placeholder="Clave secreta"
               type="password"
               value={passphrase}
             />
             <button className="confirm-button" disabled={saving || !passphrase.trim()} onClick={confirmDestination} type="button">
-              {saving ? "Guardando..." : "Confirmar destino 🔐"}
+              {saving ? "Guardando" : "Guardar destino"}
             </button>
           </section>
         </div>
