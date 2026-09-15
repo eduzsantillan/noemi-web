@@ -35,7 +35,8 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
@@ -795,4 +796,426 @@ h1 {
 @keyframes modal-pop {
   from { opacity: 0; transform: translateY(14px) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.top-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.ghost-link {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border: 1px solid rgba(251, 244, 232, 0.16);
+  border-radius: 999px;
+  background: rgba(251, 244, 232, 0.052);
+  color: rgba(251, 244, 232, 0.72);
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, color 180ms ease;
+}
+
+.ghost-link:hover,
+.ghost-link:focus-visible {
+  border-color: rgba(217, 185, 143, 0.48);
+  background: rgba(251, 244, 232, 0.09);
+  color: var(--ivory);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.mural-page {
+  padding-bottom: 86px;
+}
+
+.mural-page::before {
+  background-size: 92px 92px;
+  opacity: 0.72;
+}
+
+.mural-orb {
+  position: fixed;
+  z-index: -1;
+  border: 1px solid rgba(217, 185, 143, 0.16);
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0.22;
+  animation: orb-float 12s ease-in-out infinite alternate;
+}
+
+.mural-orb-one {
+  top: 14%;
+  left: 7%;
+  width: 138px;
+  height: 138px;
+}
+
+.mural-orb-two {
+  right: 9%;
+  bottom: 18%;
+  width: 86px;
+  height: 86px;
+  animation-delay: -4s;
+}
+
+.mural-hero,
+.notes-section {
+  width: min(100%, 1160px);
+  margin-inline: auto;
+}
+
+.mural-hero {
+  padding: 24px 0 46px;
+}
+
+.mural-topline {
+  margin-bottom: 30px;
+}
+
+.mural-hero-grid {
+  display: grid;
+  gap: 18px;
+  align-items: stretch;
+}
+
+.mural-copy-card,
+.note-form,
+.empty-mural {
+  border: 1px solid var(--line);
+  background: linear-gradient(155deg, rgba(251, 244, 232, 0.11), rgba(251, 244, 232, 0.045));
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(20px);
+}
+
+.mural-copy-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 460px;
+  padding: clamp(24px, 6vw, 56px);
+  border-radius: 38px;
+  animation: reveal-up 760ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+.mural-copy-card::before {
+  position: absolute;
+  inset: auto -14% -34% auto;
+  width: min(54vw, 430px);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(217, 185, 143, 0.23), transparent 67%);
+  content: "";
+}
+
+.mural-copy-card::after {
+  position: absolute;
+  right: clamp(18px, 4vw, 42px);
+  bottom: clamp(20px, 4vw, 46px);
+  width: clamp(92px, 19vw, 170px);
+  aspect-ratio: 4 / 5;
+  border: 1px solid rgba(251, 244, 232, 0.2);
+  border-radius: 999px 999px 22px 22px;
+  background:
+    linear-gradient(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.18)),
+    url("/birthday/noemi-birthday-2.jpg") center / cover;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.22);
+  content: "";
+  transform: rotate(3deg);
+}
+
+.mural-copy-card h1 {
+  position: relative;
+  z-index: 1;
+  max-width: 7.8ch;
+  font-size: clamp(3.85rem, 12.5vw, 8.2rem);
+}
+
+.mural-copy-card .intro-copy,
+.mural-copy-card .kicker {
+  position: relative;
+  z-index: 1;
+}
+
+.note-form {
+  display: flex;
+  flex-direction: column;
+  padding: clamp(22px, 5vw, 34px);
+  border-radius: 34px;
+  animation: reveal-up 820ms 100ms cubic-bezier(.2,.8,.2,1) both;
+}
+
+.note-form label {
+  margin: 14px 0 8px;
+  color: var(--champagne);
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.note-form input,
+.note-form textarea {
+  width: 100%;
+  border: 1px solid rgba(251, 244, 232, 0.17);
+  border-radius: 20px;
+  background: rgba(10, 8, 7, 0.24);
+  color: var(--ivory);
+  outline: none;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.note-form input {
+  height: 56px;
+  padding: 0 16px;
+}
+
+.note-form textarea {
+  min-height: 160px;
+  resize: vertical;
+  padding: 16px;
+  line-height: 1.7;
+}
+
+.note-form input::placeholder,
+.note-form textarea::placeholder {
+  color: rgba(251, 244, 232, 0.34);
+}
+
+.note-form input:focus,
+.note-form textarea:focus {
+  border-color: rgba(217, 185, 143, 0.74);
+  background: rgba(251, 244, 232, 0.07);
+  box-shadow: 0 0 0 5px rgba(217, 185, 143, 0.12);
+}
+
+.form-footer {
+  display: grid;
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.form-footer span {
+  color: rgba(251, 244, 232, 0.46);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.form-footer .confirm-button {
+  margin-top: 0;
+}
+
+.mural-feedback {
+  margin-top: 14px;
+}
+
+.notes-section {
+  padding-top: 16px;
+}
+
+.notes-heading {
+  margin-bottom: 20px;
+}
+
+.notes-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.sticky-note {
+  position: relative;
+  min-height: 230px;
+  padding: 34px 24px 22px;
+  border: 1px solid rgba(28, 23, 21, 0.08);
+  border-radius: 28px;
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.56), transparent 44%),
+    linear-gradient(145deg, #fff7df, #e8d3ad);
+  color: var(--ink);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.22);
+  transform: rotate(var(--tilt, -1deg));
+  transform-origin: 50% 12px;
+  animation: note-arrive 560ms cubic-bezier(.2,.8,.2,1) both, note-sway 4.8s ease-in-out infinite alternate;
+  animation-delay: var(--delay, 0ms), calc(var(--delay, 0ms) + 560ms);
+}
+
+.sticky-note:nth-child(4n + 2) {
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.58), transparent 45%),
+    linear-gradient(145deg, #ffe6df, #dca999);
+}
+
+.sticky-note:nth-child(4n + 3) {
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.54), transparent 45%),
+    linear-gradient(145deg, #eff0dc, #c7c6a2);
+}
+
+.sticky-note:nth-child(4n + 4) {
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.58), transparent 45%),
+    linear-gradient(145deg, #efe3ff, #c8ace8);
+}
+
+.sticky-note:hover {
+  z-index: 2;
+  transform: translateY(-7px) rotate(0deg) scale(1.015);
+}
+
+.sticky-note p {
+  margin-bottom: 28px;
+  font-family: var(--display);
+  font-size: clamp(1.55rem, 3.4vw, 2.25rem);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 1.03;
+  white-space: pre-wrap;
+}
+
+.sticky-note footer {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  justify-content: space-between;
+  margin-top: auto;
+  color: rgba(28, 23, 21, 0.64);
+}
+
+.sticky-note strong {
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sticky-note footer span {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pin {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 36% 32%, #fff, #d9b98f 30%, #7c4f43 100%);
+  box-shadow: 0 5px 12px rgba(28, 23, 21, 0.18);
+  transform: translateX(-50%);
+}
+
+.skeleton-note {
+  min-height: 210px;
+  overflow: hidden;
+  background: rgba(251, 244, 232, 0.08);
+  transform: none;
+  animation: skeleton-pulse 1.2s ease-in-out infinite alternate;
+}
+
+.empty-mural {
+  display: grid;
+  place-items: center;
+  min-height: 280px;
+  padding: 30px;
+  border-radius: 34px;
+  text-align: center;
+}
+
+.empty-mural span {
+  color: var(--champagne);
+  font-size: 2.4rem;
+}
+
+.empty-mural h3 {
+  margin: 12px 0 8px;
+  font-family: var(--display);
+  font-size: clamp(2.4rem, 9vw, 4.8rem);
+  font-weight: 500;
+  letter-spacing: -0.05em;
+  line-height: 0.9;
+}
+
+.empty-mural p {
+  max-width: 360px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+@media (min-width: 860px) {
+  .mural-hero-grid {
+    grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.62fr);
+    gap: 18px;
+  }
+
+  .note-form {
+    min-height: 460px;
+  }
+
+  .form-footer {
+    grid-template-columns: 1fr auto;
+  }
+
+  .form-footer .confirm-button {
+    width: auto;
+    min-width: 210px;
+    padding-inline: 24px;
+  }
+}
+
+@media (max-width: 620px) {
+  .top-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .topline.mural-topline {
+    align-items: center;
+  }
+
+  .mural-copy-card {
+    min-height: 430px;
+  }
+
+  .mural-copy-card::after {
+    opacity: 0.78;
+  }
+
+  .notes-board {
+    grid-template-columns: 1fr;
+  }
+}
+
+@keyframes note-arrive {
+  from { opacity: 0; transform: translateY(28px) rotate(calc(var(--tilt, 0deg) - 4deg)) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) rotate(var(--tilt, 0deg)) scale(1); }
+}
+
+@keyframes note-sway {
+  from { transform: rotate(var(--tilt, 0deg)); }
+  to { transform: rotate(calc(var(--tilt, 0deg) * -0.45)); }
+}
+
+@keyframes skeleton-pulse {
+  from { opacity: 0.38; }
+  to { opacity: 0.78; }
+}
+
+@keyframes orb-float {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(18px, -22px, 0) scale(1.08); }
 }

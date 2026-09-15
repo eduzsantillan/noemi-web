@@ -51,6 +51,20 @@ async function ensureSchema() {
       chosen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS birthday_mural_messages (
+      id BIGSERIAL PRIMARY KEY,
+      author TEXT NOT NULL CHECK (char_length(trim(author)) BETWEEN 1 AND 80),
+      message TEXT NOT NULL CHECK (char_length(trim(message)) BETWEEN 1 AND 500),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS birthday_mural_messages_created_at_idx
+    ON birthday_mural_messages (created_at DESC);
+  `);
 }
 
 function toChoice(row) {
@@ -58,6 +72,15 @@ function toChoice(row) {
   return {
     destination: row.destination,
     chosenAt: row.chosen_at,
+  };
+}
+
+function toMuralMessage(row) {
+  return {
+    id: Number(row.id),
+    author: row.author,
+    message: row.message,
+    createdAt: row.created_at,
   };
 }
 
@@ -88,6 +111,44 @@ async function handleApi(request, response, url) {
 
   if (request.method === 'GET' && url.pathname === '/api/destinations') {
     return sendJson(response, 200, { destinations: DESTINATIONS });
+  }
+
+
+  if (request.method === 'GET' && url.pathname === '/api/messages') {
+    try {
+      const result = await pool.query(
+        `SELECT id, author, message, created_at
+         FROM birthday_mural_messages
+         ORDER BY created_at DESC, id DESC
+         LIMIT 120`,
+      );
+      return sendJson(response, 200, { messages: result.rows.map(toMuralMessage) });
+    } catch {
+      return sendJson(response, 500, { error: 'No se pudo leer el mural.' });
+    }
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/messages') {
+    try {
+      const { author, message } = await readJson(request);
+      const cleanAuthor = typeof author === 'string' ? author.trim().replace(/\s+/g, ' ') : '';
+      const cleanMessage = typeof message === 'string' ? message.trim() : '';
+
+      if (!cleanAuthor || cleanAuthor.length > 80 || !cleanMessage || cleanMessage.length > 500) {
+        return sendJson(response, 400, { error: 'Mensaje inválido.' });
+      }
+
+      const result = await pool.query(
+        `INSERT INTO birthday_mural_messages (author, message)
+         VALUES ($1, $2)
+         RETURNING id, author, message, created_at`,
+        [cleanAuthor, cleanMessage],
+      );
+
+      return sendJson(response, 201, { message: toMuralMessage(result.rows[0]) });
+    } catch {
+      return sendJson(response, 500, { error: 'No se pudo guardar el mensaje.' });
+    }
   }
 
   if (request.method === 'GET' && url.pathname === '/api/choice') {

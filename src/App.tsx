@@ -5,6 +5,7 @@ const BIRTHDAY_TARGET = new Date("2026-11-20T00:00:00-05:00");
 const storageKey = "noemi-birthday-language";
 
 type Language = "en" | "es";
+type Route = "home" | "mural";
 
 type Destination = {
   value: string;
@@ -18,6 +19,13 @@ type Choice = {
   chosenAt: string;
 };
 
+type MuralMessage = {
+  id: number;
+  author: string;
+  message: string;
+  createdAt: string;
+};
+
 type CountdownParts = {
   days: number;
   hours: number;
@@ -26,7 +34,31 @@ type CountdownParts = {
   isBirthday: boolean;
 };
 
+type MuralCopy = {
+  routeKicker: string;
+  title: string;
+  intro: string;
+  formKicker: string;
+  nameLabel: string;
+  namePlaceholder: string;
+  messageLabel: string;
+  messagePlaceholder: string;
+  submit: string;
+  saving: string;
+  boardKicker: string;
+  boardTitle: string;
+  boardText: string;
+  emptyTitle: string;
+  emptyText: string;
+  loadError: string;
+  saveError: string;
+  saved: string;
+  characterCount: (count: number) => string;
+  noteDate: (date: Date) => string;
+};
+
 type PageCopy = {
+  nav: { mural: string; home: string };
   heroKicker: string;
   heroTitle: string;
   heroText: string;
@@ -55,10 +87,12 @@ type PageCopy = {
   time: { days: string; hours: string; minutes: string; seconds: string };
   destinations: Destination[];
   photos: { src: string; alt: string }[];
+  mural: MuralCopy;
 };
 
 const copy: Record<Language, PageCopy> = {
   en: {
+    nav: { mural: "Birthday mural", home: "Birthday page" },
     heroKicker: "Noemi · November 20",
     heroTitle: "A getaway for Noemi.",
     heroText:
@@ -102,8 +136,33 @@ const copy: Record<Language, PageCopy> = {
       { src: "/birthday/noemi-birthday-1.jpg", alt: "Noemi traveling" },
       { src: "/birthday/noemi-birthday-3.jpg", alt: "Noemi enjoying a sunny view" },
     ],
+    mural: {
+      routeKicker: "For Noemi, from everyone who loves her",
+      title: "Leave Noemi a birthday note.",
+      intro:
+        "A private little wall for sweet messages, inside jokes, wishes, and tiny pieces of love before her birthday arrives.",
+      formKicker: "Add yours",
+      nameLabel: "Your name",
+      namePlaceholder: "Friend, cousin, accomplice…",
+      messageLabel: "Your note",
+      messagePlaceholder: "Write something that will make her smile.",
+      submit: "Place on the mural",
+      saving: "Placing",
+      boardKicker: "The mural",
+      boardTitle: "Notes waiting for Noemi.",
+      boardText: "Every message becomes a little card on her birthday wall.",
+      emptyTitle: "The first note is waiting.",
+      emptyText: "Be the first person to leave Noemi a birthday wish.",
+      loadError: "The mural will appear once the local app is running.",
+      saveError: "Couldn’t place the note yet. Try again in a moment.",
+      saved: "Your note is on the mural.",
+      characterCount: (count) => `${count}/500`,
+      noteDate: (date) =>
+        date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    },
   },
   es: {
+    nav: { mural: "Mural de cumpleaños", home: "Página principal" },
     heroKicker: "Noemi · 20 de noviembre",
     heroTitle: "Una escapada para Noemi.",
     heroText:
@@ -145,12 +204,41 @@ const copy: Record<Language, PageCopy> = {
       { src: "/birthday/noemi-birthday-1.jpg", alt: "Noemi de viaje" },
       { src: "/birthday/noemi-birthday-3.jpg", alt: "Noemi disfrutando una vista soleada" },
     ],
+    mural: {
+      routeKicker: "Para Noemi, de todos los que la quieren",
+      title: "Déjale una nota de cumpleaños a Noemi.",
+      intro:
+        "Un murito privado para mensajes lindos, chistes internos, deseos y pedacitos de cariño antes de que llegue su cumpleaños.",
+      formKicker: "Agrega el tuyo",
+      nameLabel: "Tu nombre",
+      namePlaceholder: "Amiga, primo, cómplice…",
+      messageLabel: "Tu nota",
+      messagePlaceholder: "Escribe algo que le saque una sonrisa.",
+      submit: "Poner en el mural",
+      saving: "Poniendo",
+      boardKicker: "El mural",
+      boardTitle: "Notas esperando a Noemi.",
+      boardText: "Cada mensaje se convierte en una tarjetita en su pared de cumpleaños.",
+      emptyTitle: "La primera nota está esperando.",
+      emptyText: "Sé la primera persona en dejarle un deseo a Noemi.",
+      loadError: "El mural aparecerá cuando la app local esté corriendo.",
+      saveError: "No pude poner la nota todavía. Intenta de nuevo en un momento.",
+      saved: "Tu nota ya está en el mural.",
+      characterCount: (count) => `${count}/500`,
+      noteDate: (date) =>
+        date.toLocaleDateString("es-PE", { month: "short", day: "numeric" }),
+    },
   },
 };
 
 function getInitialLanguage(): Language {
   if (typeof window === "undefined") return "en";
   return window.localStorage.getItem(storageKey) === "es" ? "es" : "en";
+}
+
+function getRouteFromPath(): Route {
+  if (typeof window === "undefined") return "home";
+  return window.location.pathname.replace(/\/$/, "") === "/mural" ? "mural" : "home";
 }
 
 function getCountdown(): CountdownParts {
@@ -171,26 +259,62 @@ function getCountdown(): CountdownParts {
 
 export default function App() {
   const [language, setLanguage] = useState<Language>(getInitialLanguage);
+  const [route, setRoute] = useState<Route>(getRouteFromPath);
+  const t = copy[language];
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKey, language);
+    document.documentElement.lang = language;
+  }, [language]);
+
+  useEffect(() => {
+    const handlePopState = () => setRoute(getRouteFromPath());
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    document.title = route === "mural" ? "Noemi Birthday Mural" : "Noemi Birthday Getaway";
+  }, [route]);
+
+  function navigate(path: "/" | "/mural") {
+    window.history.pushState({}, "", path);
+    setRoute(getRouteFromPath());
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  if (route === "mural") {
+    return <MuralPage language={language} onLanguageChange={setLanguage} onNavigate={navigate} t={t} />;
+  }
+
+  return <BirthdayHome language={language} onLanguageChange={setLanguage} onNavigate={navigate} t={t} />;
+}
+
+function BirthdayHome({
+  language,
+  onLanguageChange,
+  onNavigate,
+  t,
+}: {
+  language: Language;
+  onLanguageChange: (language: Language) => void;
+  onNavigate: (path: "/" | "/mural") => void;
+  t: PageCopy;
+}) {
   const [countdown, setCountdown] = useState(getCountdown);
   const [choice, setChoice] = useState<Choice | null>(null);
   const [choiceLoading, setChoiceLoading] = useState(true);
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
   const [passphrase, setPassphrase] = useState("");
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
   const destinationRef = useRef<HTMLElement | null>(null);
 
-  const t = copy[language];
   const destinations = t.destinations;
   const photos = t.photos;
 
   const confetti = useMemo(() => Array.from({ length: 44 }, (_, index) => index), []);
   const balloons = useMemo(() => Array.from({ length: 18 }, (_, index) => index), []);
-
-  useEffect(() => {
-    window.localStorage.setItem(storageKey, language);
-    document.documentElement.lang = language;
-  }, [language]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setCountdown(getCountdown()), 1000);
@@ -207,7 +331,7 @@ export default function App() {
         const data = (await response.json()) as { choice: Choice | null };
         if (!cancelled) setChoice(data.choice);
       } catch {
-        if (!cancelled) setMessage(copy[language].loadError);
+        if (!cancelled) setStatusMessage(t.loadError);
       } finally {
         if (!cancelled) setChoiceLoading(false);
       }
@@ -218,7 +342,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [language]);
+  }, [t.loadError]);
 
   const lockedDestination = choice
     ? destinations.find((destination) => destination.value === choice.destination)
@@ -228,7 +352,7 @@ export default function App() {
     if (choice || choiceLoading) return;
     setSelectedDestination(destination);
     setPassphrase("");
-    setMessage("");
+    setStatusMessage("");
   }
 
   function closeConfirmation() {
@@ -241,7 +365,7 @@ export default function App() {
     if (!selectedDestination) return;
 
     setSaving(true);
-    setMessage("");
+    setStatusMessage("");
 
     try {
       const response = await fetch("/api/choice", {
@@ -256,16 +380,16 @@ export default function App() {
       const data = (await response.json()) as { choice?: Choice; error?: string };
 
       if (!response.ok || !data.choice) {
-        setMessage(t.saveError);
+        setStatusMessage(t.saveError);
         return;
       }
 
       setChoice(data.choice);
       setSelectedDestination(null);
       setPassphrase("");
-      setMessage(t.saved(selectedDestination.name));
+      setStatusMessage(t.saved(selectedDestination.name));
     } catch {
-      setMessage(t.fallbackError);
+      setStatusMessage(t.fallbackError);
     } finally {
       setSaving(false);
     }
@@ -313,7 +437,12 @@ export default function App() {
         <div className="intro">
           <div className="topline">
             <p className="kicker">{t.heroKicker}</p>
-            <LanguageToggle language={language} onChange={setLanguage} />
+            <div className="top-actions">
+              <button className="ghost-link" onClick={() => onNavigate("/mural")} type="button">
+                {t.nav.mural}
+              </button>
+              <LanguageToggle language={language} onChange={onLanguageChange} />
+            </div>
           </div>
           <h1 id="birthday-title">{t.heroTitle}</h1>
           <p className="intro-copy">{t.heroText}</p>
@@ -398,7 +527,7 @@ export default function App() {
           })}
         </div>
 
-        {message && <p className="status-message" role="status">{message}</p>}
+        {statusMessage && <p className="status-message" role="status">{statusMessage}</p>}
       </section>
 
       {selectedDestination && (
@@ -428,6 +557,176 @@ export default function App() {
           </section>
         </div>
       )}
+    </main>
+  );
+}
+
+function MuralPage({
+  language,
+  onLanguageChange,
+  onNavigate,
+  t,
+}: {
+  language: Language;
+  onLanguageChange: (language: Language) => void;
+  onNavigate: (path: "/" | "/mural") => void;
+  t: PageCopy;
+}) {
+  const [messages, setMessages] = useState<MuralMessage[]>([]);
+  const [author, setAuthor] = useState("");
+  const [note, setNote] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const muralCopy = t.mural;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMessages() {
+      try {
+        const response = await fetch("/api/messages");
+        if (!response.ok) throw new Error("Could not load messages.");
+        const data = (await response.json()) as { messages: MuralMessage[] };
+        if (!cancelled) setMessages(data.messages);
+      } catch {
+        if (!cancelled) setFeedback(muralCopy.loadError);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadMessages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [muralCopy.loadError]);
+
+  async function submitNote(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmedAuthor = author.trim();
+    const trimmedNote = note.trim();
+    if (!trimmedAuthor || !trimmedNote) return;
+
+    setSaving(true);
+    setFeedback("");
+
+    try {
+      const response = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ author: trimmedAuthor, message: trimmedNote }),
+      });
+
+      const data = (await response.json()) as { message?: MuralMessage; error?: string };
+      if (!response.ok || !data.message) {
+        setFeedback(muralCopy.saveError);
+        return;
+      }
+
+      setMessages((current) => [data.message as MuralMessage, ...current]);
+      setAuthor("");
+      setNote("");
+      setFeedback(muralCopy.saved);
+    } catch {
+      setFeedback(muralCopy.saveError);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <main className="birthday-page mural-page">
+      <div className="silk silk-one" />
+      <div className="silk silk-two" />
+      <div className="mural-orb mural-orb-one" aria-hidden="true" />
+      <div className="mural-orb mural-orb-two" aria-hidden="true" />
+
+      <section className="mural-hero" aria-labelledby="mural-title">
+        <div className="topline mural-topline">
+          <button className="ghost-link" onClick={() => onNavigate("/")} type="button">
+            ← {t.nav.home}
+          </button>
+          <LanguageToggle language={language} onChange={onLanguageChange} />
+        </div>
+
+        <div className="mural-hero-grid">
+          <div className="mural-copy-card">
+            <p className="kicker">{muralCopy.routeKicker}</p>
+            <h1 id="mural-title">{muralCopy.title}</h1>
+            <p className="intro-copy">{muralCopy.intro}</p>
+          </div>
+
+          <form className="note-form" onSubmit={submitNote}>
+            <p className="kicker">{muralCopy.formKicker}</p>
+            <label htmlFor="mural-author">{muralCopy.nameLabel}</label>
+            <input
+              autoComplete="name"
+              id="mural-author"
+              maxLength={80}
+              onChange={(event) => setAuthor(event.target.value)}
+              placeholder={muralCopy.namePlaceholder}
+              value={author}
+            />
+
+            <label htmlFor="mural-note">{muralCopy.messageLabel}</label>
+            <textarea
+              id="mural-note"
+              maxLength={500}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder={muralCopy.messagePlaceholder}
+              rows={6}
+              value={note}
+            />
+            <div className="form-footer">
+              <span>{muralCopy.characterCount(note.length)}</span>
+              <button className="confirm-button" disabled={saving || !author.trim() || !note.trim()} type="submit">
+                {saving ? `${muralCopy.saving}…` : muralCopy.submit}
+              </button>
+            </div>
+            {feedback && <p className="status-message mural-feedback" role="status">{feedback}</p>}
+          </form>
+        </div>
+      </section>
+
+      <section className="notes-section reveal-block" aria-labelledby="notes-title">
+        <div className="section-heading notes-heading">
+          <p className="kicker">{muralCopy.boardKicker}</p>
+          <h2 id="notes-title">{muralCopy.boardTitle}</h2>
+          <p>{muralCopy.boardText}</p>
+        </div>
+
+        {!loading && messages.length === 0 ? (
+          <div className="empty-mural">
+            <span>✦</span>
+            <h3>{muralCopy.emptyTitle}</h3>
+            <p>{muralCopy.emptyText}</p>
+          </div>
+        ) : (
+          <div className="notes-board" aria-busy={loading}>
+            {loading
+              ? Array.from({ length: 6 }, (_, index) => <div className="sticky-note skeleton-note" key={index} />)
+              : messages.map((muralMessage, index) => (
+                  <article
+                    className="sticky-note"
+                    key={muralMessage.id}
+                    style={{
+                      "--tilt": `${[-2.2, 1.5, -0.6, 2.1, -1.4, 0.9][index % 6]}deg`,
+                      "--delay": `${Math.min(index, 10) * 70}ms`,
+                    } as CSSProperties}
+                  >
+                    <div className="pin" aria-hidden="true" />
+                    <p>{muralMessage.message}</p>
+                    <footer>
+                      <strong>{muralMessage.author}</strong>
+                      <span>{muralCopy.noteDate(new Date(muralMessage.createdAt))}</span>
+                    </footer>
+                  </article>
+                ))}
+          </div>
+        )}
+      </section>
     </main>
   );
 }
