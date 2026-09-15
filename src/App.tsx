@@ -157,7 +157,7 @@ const copy: Record<Language, PageCopy> = {
       messageLabel: "Your note",
       messagePlaceholder: "Write something that will make her smile.",
       photoLabel: "Add a photo",
-      photoHint: "Optional — one beautiful memory per note.",
+      photoHint: "Optional — long or heavy photos are cropped and compressed for the note.",
       photoButton: "Choose photo",
       removePhoto: "Remove photo",
       submit: "Place on the mural",
@@ -232,7 +232,7 @@ const copy: Record<Language, PageCopy> = {
       messageLabel: "Tu nota",
       messagePlaceholder: "Escribe algo que le saque una sonrisa.",
       photoLabel: "Agrega una foto",
-      photoHint: "Opcional — un recuerdo bonito por nota.",
+      photoHint: "Opcional — las fotos largas o pesadas se recortan y comprimen solas.",
       photoButton: "Escoger foto",
       removePhoto: "Quitar foto",
       submit: "Poner en el mural",
@@ -587,7 +587,10 @@ function BirthdayHome({
 
 const MAX_NOTE_OVERLAP = 0.1;
 const MAX_IMAGE_DATA_URL_LENGTH = 3_500_000;
-const NOTE_ESTIMATE = { width: 272, height: 286 };
+const NOTE_IMAGE_TARGET_LENGTH = 1_250_000;
+const NOTE_IMAGE_ASPECT_RATIO = 4 / 3;
+const NOTE_ESTIMATE = { width: 320, height: 320 };
+const PHOTO_NOTE_ESTIMATE_HEIGHT = 430;
 
 type DragState = {
   id: number;
@@ -671,7 +674,7 @@ function MuralPage({
 
     try {
       if (!file.type.startsWith("image/")) throw new Error("Not an image.");
-      const dataUrl = await readFileAsDataUrl(file);
+      const dataUrl = await prepareImageForNote(file);
       if (dataUrl.length > MAX_IMAGE_DATA_URL_LENGTH) throw new Error("Image too large.");
       setImageDataUrl(dataUrl);
       setFeedback("");
@@ -960,6 +963,68 @@ function MuralPage({
   );
 }
 
+async function prepareImageForNote(file: File) {
+  const sourceDataUrl = await readFileAsDataUrl(file);
+
+  try {
+    const image = await loadImage(sourceDataUrl);
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas unavailable.");
+
+    const sourceAspect = image.naturalWidth / image.naturalHeight;
+    let cropWidth = image.naturalWidth;
+    let cropHeight = image.naturalHeight;
+    let cropX = 0;
+    let cropY = 0;
+
+    if (sourceAspect > NOTE_IMAGE_ASPECT_RATIO) {
+      cropWidth = image.naturalHeight * NOTE_IMAGE_ASPECT_RATIO;
+      cropX = (image.naturalWidth - cropWidth) / 2;
+    } else {
+      cropHeight = image.naturalWidth / NOTE_IMAGE_ASPECT_RATIO;
+      cropY = (image.naturalHeight - cropHeight) / 2;
+    }
+
+    let targetWidth = Math.min(1100, Math.round(cropWidth));
+    let targetHeight = Math.round(targetWidth / NOTE_IMAGE_ASPECT_RATIO);
+    let quality = 0.82;
+    let result = "";
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      context.fillStyle = "#fbf4e8";
+      context.fillRect(0, 0, targetWidth, targetHeight);
+      context.drawImage(image, cropX, cropY, cropWidth, cropHeight, 0, 0, targetWidth, targetHeight);
+      result = canvas.toDataURL("image/jpeg", quality);
+
+      if (result.length <= NOTE_IMAGE_TARGET_LENGTH || (targetWidth <= 560 && quality <= 0.56)) break;
+      if (quality > 0.58) {
+        quality -= 0.08;
+      } else {
+        targetWidth = Math.round(targetWidth * 0.82);
+        targetHeight = Math.round(targetWidth / NOTE_IMAGE_ASPECT_RATIO);
+      }
+    }
+
+    if (!result || result.length > MAX_IMAGE_DATA_URL_LENGTH) throw new Error("Compressed image too large.");
+    return result;
+  } catch (error) {
+    if (sourceDataUrl.length <= NOTE_IMAGE_TARGET_LENGTH) return sourceDataUrl;
+    throw error;
+  }
+}
+
+function loadImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Image could not be decoded."));
+    image.src = src;
+  });
+}
+
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -988,7 +1053,7 @@ function arrangeMessages(messages: MuralMessage[], board: HTMLDivElement | null)
 
   messages.forEach((message) => {
     const width = Math.min(NOTE_ESTIMATE.width, boardWidth * 0.86);
-    const height = message.imageDataUrl ? 372 : NOTE_ESTIMATE.height;
+    const height = message.imageDataUrl ? PHOTO_NOTE_ESTIMATE_HEIGHT : NOTE_ESTIMATE.height;
     const crowded = hasCrowdedOverlap(message.id, message.x, message.y, width, height, placed, {
       width: boardWidth,
       height: boardHeight,
@@ -1014,7 +1079,7 @@ function findOpenPosition(messages: MuralMessage[], board: HTMLDivElement | null
   const boardWidth = boardRect?.width || 1060;
   const boardHeight = boardRect?.height || 760;
   const width = Math.min(NOTE_ESTIMATE.width, boardWidth * 0.86);
-  const height = hasPhoto ? 372 : NOTE_ESTIMATE.height;
+  const height = hasPhoto ? PHOTO_NOTE_ESTIMATE_HEIGHT : NOTE_ESTIMATE.height;
   const columns = [5, 29, 52, 8, 35, 58, 70, 18, 46];
   const rows = [39, 63, 73, 48, 24, 57];
 
@@ -1066,7 +1131,7 @@ function hasCrowdedOverlap(
 
   return messages.some((message) => {
     if (message.id === activeId) return false;
-    const otherHeight = message.imageDataUrl ? 372 : NOTE_ESTIMATE.height;
+    const otherHeight = message.imageDataUrl ? PHOTO_NOTE_ESTIMATE_HEIGHT : NOTE_ESTIMATE.height;
     const otherRect = percentToRect(
       message.x,
       message.y,
