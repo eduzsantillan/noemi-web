@@ -170,7 +170,7 @@ const copy: Record<Language, PageCopy> = {
       loadError: "The mural will appear once the local app is running.",
       saveError: "Couldn’t place the note yet. Try again in a moment.",
       moveError: "That spot is too crowded — try beside it.",
-      photoError: "That photo is too large for one note. Try a smaller image.",
+      photoError: "Couldn’t read that photo. Try another one or a screenshot.",
       saved: "Your note is on the mural.",
       dragHint: "",
       characterCount: (count) => `${count}/500`,
@@ -245,7 +245,7 @@ const copy: Record<Language, PageCopy> = {
       loadError: "El mural aparecerá cuando la app local esté corriendo.",
       saveError: "No pude poner la nota todavía. Intenta de nuevo en un momento.",
       moveError: "Ese espacio está muy lleno — prueba al costado.",
-      photoError: "Esa foto pesa demasiado para una nota. Prueba una imagen más pequeña.",
+      photoError: "No pude leer esa foto. Prueba otra o una captura.",
       saved: "Tu nota ya está en el mural.",
       dragHint: "",
       characterCount: (count) => `${count}/500`,
@@ -780,7 +780,11 @@ function MuralPage({
     dragging.lastX = next.x;
     dragging.lastY = next.y;
 
-    if (!hasCrowdedOverlap(dragging.id, next.x, next.y, dragging.width, dragging.height, messages, boardRect)) {
+    const isValidSpot =
+      !hasCrowdedOverlap(dragging.id, next.x, next.y, dragging.width, dragging.height, messages, boardRect) &&
+      !isInProtectedMuralZone(next.x, next.y);
+
+    if (isValidSpot) {
       dragging.lastValidX = next.x;
       dragging.lastValidY = next.y;
     }
@@ -798,7 +802,11 @@ function MuralPage({
 
     const board = boardRef.current;
     const boardRect = board?.getBoundingClientRect();
-    const finalPosition = boardRect && hasCrowdedOverlap(dragging.id, dragging.lastX, dragging.lastY, dragging.width, dragging.height, messages, boardRect)
+    const isFinalSpotBlocked = boardRect
+      ? hasCrowdedOverlap(dragging.id, dragging.lastX, dragging.lastY, dragging.width, dragging.height, messages, boardRect) ||
+        isInProtectedMuralZone(dragging.lastX, dragging.lastY)
+      : false;
+    const finalPosition = isFinalSpotBlocked
       ? { x: dragging.lastValidX, y: dragging.lastValidY }
       : { x: dragging.lastX, y: dragging.lastY };
     const id = dragging.id;
@@ -943,7 +951,7 @@ function MuralPage({
                     "--delay": `${Math.min(index, 10) * 70}ms`,
                     "--note-left": `${muralMessage.x}%`,
                     "--note-top": `${muralMessage.y}%`,
-                    zIndex: draggingId === muralMessage.id ? 12 : 1 + index,
+                    zIndex: draggingId === muralMessage.id ? 45 : 12 + index,
                   } as CSSProperties}
                 >
                   <div className="pin" aria-hidden="true" />
@@ -980,6 +988,29 @@ async function convertHeicToJpeg(file: File) {
 }
 
 async function prepareImageForNote(file: File) {
+  try {
+    return await prepareImageOnServer(file);
+  } catch (error) {
+    console.warn("Local image preparation API unavailable; falling back to browser compression.", error);
+    return prepareImageInBrowser(file);
+  }
+}
+
+async function prepareImageOnServer(file: File) {
+  const response = await fetch("/api/prepare-image", {
+    method: "POST",
+    headers: {
+      "content-type": file.type || "application/octet-stream",
+      "x-file-name": encodeURIComponent(file.name),
+    },
+    body: file,
+  });
+  const data = (await response.json().catch(() => ({}))) as { imageDataUrl?: string };
+  if (!response.ok || !data.imageDataUrl) throw new Error("Image preparation failed.");
+  return data.imageDataUrl;
+}
+
+async function prepareImageInBrowser(file: File) {
   const processableFile = isHeicFile(file) ? await convertHeicToJpeg(file) : file;
   const sourceDataUrl = await readFileAsDataUrl(processableFile);
 

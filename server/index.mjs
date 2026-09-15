@@ -1,18 +1,28 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import pg from 'pg';
+import sharp from 'sharp';
 
 loadDotEnv();
 
 const { Pool } = pg;
+const execFileAsync = promisify(execFile);
 
 const PORT = Number(process.env.PORT ?? 4311);
 const DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://localhost:5432/noemi_birthday';
 const DESTINATION_SECRET = process.env.DESTINATION_SECRET ?? 'eduardomirey';
 const DESTINATIONS = ['Cancun', 'Playa del Carmen', 'Punta cana', 'Puerto Rico', 'Madrid', 'Panama'];
+const MAX_PHOTO_UPLOAD_BYTES = 40_000_000;
+const MAX_IMAGE_DATA_URL_LENGTH = 3_500_000;
+const NOTE_IMAGE_TARGET_LENGTH = 1_250_000;
+const NOTE_IMAGE_RATIO = 4 / 3;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -115,6 +125,94 @@ async function readJson(request, maxBytes = 6_000_000) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
+async function readBuffer(request, maxBytes = MAX_PHOTO_UPLOAD_BYTES) {
+  const chunks = [];
+  let totalBytes = 0;
+
+  for await (const chunk of request) {
+    totalBytes += chunk.length;
+    if (totalBytes > maxBytes) {
+      const error = new Error('Payload too large.');
+      error.statusCode = 413;
+      throw error;
+    }
+    chunks.push(chunk);
+  }
+
+  return Buffer.concat(chunks);
+}
+
+function decodeHeaderValue(value) {
+  if (typeof value !== 'string') return '';
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function isHeicUpload(contentType, fileName) {
+  const lowerType = String(contentType).toLowerCase();
+  const lowerName = String(fileName).toLowerCase();
+  return lowerType.includes('image/heic') || lowerType.includes('image/heif') || lowerName.endsWith('.heic') || lowerName.endsWith('.heif');
+}
+
+async function prepareNoteImage(uploadBuffer, { contentType = '', fileName = '' } = {}) {
+  try {
+    return await compressNoteImage(uploadBuffer);
+  } catch (error) {
+    if (!isHeicUpload(contentType, fileName)) throw error;
+    const jpegBuffer = await convertHeicWithSips(uploadBuffer, fileName);
+    return compressNoteImage(jpegBuffer);
+  }
+}
+
+async function compressNoteImage(sourceBuffer) {
+  let lastBuffer = null;
+  const widths = [1100, 960, 820, 680, 560];
+  const qualities = [82, 74, 66, 58, 50, 44];
+
+  for (const width of widths) {
+    const height = Math.round(width / NOTE_IMAGE_RATIO);
+    for (const quality of qualities) {
+      const output = await sharp(sourceBuffer, { animated: false, limitInputPixels: false })
+        .rotate()
+        .resize({ width, height, fit: 'cover', position: 'attention' })
+        .jpeg({ quality, mozjpeg: true })
+        .toBuffer();
+      lastBuffer = output;
+      const dataUrlLength = `data:image/jpeg;base64,${output.toString('base64')}`.length;
+      if (dataUrlLength <= NOTE_IMAGE_TARGET_LENGTH) return output;
+    }
+  }
+
+  if (lastBuffer && `data:image/jpeg;base64,${lastBuffer.toString('base64')}`.length <= MAX_IMAGE_DATA_URL_LENGTH) {
+    return lastBuffer;
+  }
+
+  const error = new Error('Prepared image too large.');
+  error.statusCode = 413;
+  throw error;
+}
+
+async function convertHeicWithSips(uploadBuffer, fileName) {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'noemi-note-'));
+  const extension = String(fileName).toLowerCase().endsWith('.heif') ? 'heif' : 'heic';
+  const inputPath = path.join(tempDir, `${randomUUID()}.${extension}`);
+  const outputPath = path.join(tempDir, `${randomUUID()}.jpg`);
+
+  try {
+    await fs.writeFile(inputPath, uploadBuffer);
+    await execFileAsync('sips', ['-s', 'format', 'jpeg', inputPath, '--out', outputPath], {
+      timeout: 30_000,
+      maxBuffer: 4_000_000,
+    });
+    return await fs.readFile(outputPath);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
 function sendJson(response, status, payload) {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
@@ -130,7 +228,7 @@ function isValidPosition(value) {
 function normalizeImageDataUrl(value) {
   if (value == null || value === '') return null;
   if (typeof value !== 'string') return null;
-  if (value.length > 3_500_000) return undefined;
+  if (value.length > MAX_IMAGE_DATA_URL_LENGTH) return undefined;
   if (!/^data:image\/(png|jpe?g|webp|gif|heic|heif);base64,/i.test(value)) return undefined;
   return value;
 }
@@ -147,6 +245,28 @@ async function handleApi(request, response, url) {
 
   if (request.method === 'GET' && url.pathname === '/api/destinations') {
     return sendJson(response, 200, { destinations: DESTINATIONS });
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/prepare-image') {
+    try {
+      const uploadBuffer = await readBuffer(request);
+      if (!uploadBuffer.length) return sendJson(response, 400, { error: 'Imagen inválida.' });
+
+      const imageBuffer = await prepareNoteImage(uploadBuffer, {
+        contentType: request.headers['content-type'] ?? '',
+        fileName: decodeHeaderValue(request.headers['x-file-name']),
+      });
+      const imageDataUrl = `data:image/jpeg;base64,${imageBuffer.toString('base64')}`;
+
+      if (imageDataUrl.length > MAX_IMAGE_DATA_URL_LENGTH) {
+        return sendJson(response, 413, { error: 'Imagen demasiado grande.' });
+      }
+
+      return sendJson(response, 200, { imageDataUrl });
+    } catch (error) {
+      const statusCode = Number(error?.statusCode) || 400;
+      return sendJson(response, statusCode, { error: 'No se pudo preparar la imagen.' });
+    }
   }
 
 

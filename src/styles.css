@@ -1895,3 +1895,20 @@ h1 {
   border-radius: 999px;
   background: rgba(217, 185, 143, 0.32);
 }
+
+/* Layer + protected-zone polish for clean mural interactions */
+.mural-board-intro {
+  z-index: 3;
+}
+
+.mural-composer {
+  z-index: 35;
+}
+
+.fullscreen-board .draggable-note {
+  z-index: 12;
+}
+
+.fullscreen-board .draggable-note.is-dragging {
+  z-index: 45 !important;
+}

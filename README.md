@@ -14,12 +14,13 @@ Incluye:
 - Ruta `/mural` para que amigas, amigos y familia dejen mensajes de cumpleaños persistidos como notas tipo post-it.
 - Los post-its del mural se pueden mover dentro del tablero; la posición se guarda y el UI evita que se tapen más de ~10%.
 - Cada post-it puede incluir una imagen opcional, persistida junto al mensaje.
-- Fotos HEIC/HEIF de iPhone se convierten a JPG antes de recortar/comprimir cuando el navegador lo permite.
+- Fotos HEIC/HEIF y fotos grandes se recortan/comprimen automáticamente antes de guardarse en una nota.
 
 ## Requisitos
 
-- Node.js
+- Node.js 20.9+
 - PostgreSQL local
+- En macOS, el servidor también puede usar `sips` como respaldo para convertir fotos HEIC de iPhone.
 
 ## Configurar PostgreSQL
 
@@ -92,7 +93,7 @@ psql postgres://localhost:5432/noemi_birthday -c "DELETE FROM birthday_mural_mes
 
 - `src/App.tsx` — UI, rutas locales, contador, modal de clave, selección de destinos y mural.
 - `src/styles.css` — diseño visual, animaciones, confetti y globos.
-- `server/index.mjs` — API mínima para PostgreSQL (`/api/choice`, `/api/messages` y guardado de posición de notas).
+- `server/index.mjs` — API mínima para PostgreSQL (`/api/choice`, `/api/messages`, preparación de imágenes y guardado de posición de notas).
 - `db/schema.sql` — tablas para la elección irreversible y mensajes del mural, incluyendo posición e imagen opcional.
 - `public/birthday/` — fotos optimizadas de Noemi.
 
