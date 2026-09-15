@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { ChangeEvent, CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const BIRTHDAY_TARGET = new Date("2026-11-20T00:00:00-05:00");
@@ -24,6 +24,9 @@ type MuralMessage = {
   author: string;
   message: string;
   createdAt: string;
+  x: number;
+  y: number;
+  imageDataUrl: string | null;
 };
 
 type CountdownParts = {
@@ -43,6 +46,10 @@ type MuralCopy = {
   namePlaceholder: string;
   messageLabel: string;
   messagePlaceholder: string;
+  photoLabel: string;
+  photoHint: string;
+  photoButton: string;
+  removePhoto: string;
   submit: string;
   saving: string;
   boardKicker: string;
@@ -52,7 +59,10 @@ type MuralCopy = {
   emptyText: string;
   loadError: string;
   saveError: string;
+  moveError: string;
+  photoError: string;
   saved: string;
+  dragHint: string;
   characterCount: (count: number) => string;
   noteDate: (date: Date) => string;
 };
@@ -146,6 +156,10 @@ const copy: Record<Language, PageCopy> = {
       namePlaceholder: "Friend, cousin, accomplice…",
       messageLabel: "Your note",
       messagePlaceholder: "Write something that will make her smile.",
+      photoLabel: "Add a photo",
+      photoHint: "Optional — one beautiful memory per note.",
+      photoButton: "Choose photo",
+      removePhoto: "Remove photo",
       submit: "Place on the mural",
       saving: "Placing",
       boardKicker: "The mural",
@@ -155,7 +169,10 @@ const copy: Record<Language, PageCopy> = {
       emptyText: "Be the first person to leave Noemi a birthday wish.",
       loadError: "The mural will appear once the local app is running.",
       saveError: "Couldn’t place the note yet. Try again in a moment.",
+      moveError: "That spot is too crowded — try beside it.",
+      photoError: "That photo is too large for one note. Try a smaller image.",
       saved: "Your note is on the mural.",
+      dragHint: "Drag the notes gently. They keep a little personal space.",
       characterCount: (count) => `${count}/500`,
       noteDate: (date) =>
         date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
@@ -214,6 +231,10 @@ const copy: Record<Language, PageCopy> = {
       namePlaceholder: "Amiga, primo, cómplice…",
       messageLabel: "Tu nota",
       messagePlaceholder: "Escribe algo que le saque una sonrisa.",
+      photoLabel: "Agrega una foto",
+      photoHint: "Opcional — un recuerdo bonito por nota.",
+      photoButton: "Escoger foto",
+      removePhoto: "Quitar foto",
       submit: "Poner en el mural",
       saving: "Poniendo",
       boardKicker: "El mural",
@@ -223,7 +244,10 @@ const copy: Record<Language, PageCopy> = {
       emptyText: "Sé la primera persona en dejarle un deseo a Noemi.",
       loadError: "El mural aparecerá cuando la app local esté corriendo.",
       saveError: "No pude poner la nota todavía. Intenta de nuevo en un momento.",
+      moveError: "Ese espacio está muy lleno — prueba al costado.",
+      photoError: "Esa foto pesa demasiado para una nota. Prueba una imagen más pequeña.",
       saved: "Tu nota ya está en el mural.",
+      dragHint: "Arrastra las notas suavecito. Cada una conserva su propio espacio.",
       characterCount: (count) => `${count}/500`,
       noteDate: (date) =>
         date.toLocaleDateString("es-PE", { month: "short", day: "numeric" }),
@@ -561,6 +585,30 @@ function BirthdayHome({
   );
 }
 
+const MAX_NOTE_OVERLAP = 0.1;
+const MAX_IMAGE_DATA_URL_LENGTH = 3_500_000;
+const NOTE_ESTIMATE = { width: 272, height: 286 };
+
+type DragState = {
+  id: number;
+  pointerId: number;
+  startPointerX: number;
+  startPointerY: number;
+  startX: number;
+  startY: number;
+  lastX: number;
+  lastY: number;
+  width: number;
+  height: number;
+};
+
+type Rect = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
 function MuralPage({
   language,
   onLanguageChange,
@@ -575,9 +623,13 @@ function MuralPage({
   const [messages, setMessages] = useState<MuralMessage[]>([]);
   const [author, setAuthor] = useState("");
   const [note, setNote] = useState("");
+  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [dragging, setDragging] = useState<DragState | null>(null);
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const muralCopy = t.mural;
 
   useEffect(() => {
@@ -588,7 +640,11 @@ function MuralPage({
         const response = await fetch("/api/messages");
         if (!response.ok) throw new Error("Could not load messages.");
         const data = (await response.json()) as { messages: MuralMessage[] };
-        if (!cancelled) setMessages(data.messages);
+        const arranged = arrangeMessages(data.messages.map(normalizeMuralMessage), boardRef.current);
+        if (!cancelled) {
+          setMessages(arranged.messages);
+          arranged.changed.forEach((item) => void persistPosition(item.id, item.x, item.y));
+        }
       } catch {
         if (!cancelled) setFeedback(muralCopy.loadError);
       } finally {
@@ -603,11 +659,31 @@ function MuralPage({
     };
   }, [muralCopy.loadError]);
 
-  async function submitNote(event: React.FormEvent<HTMLFormElement>) {
+  async function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      if (!file.type.startsWith("image/")) throw new Error("Not an image.");
+      const dataUrl = await readFileAsDataUrl(file);
+      if (dataUrl.length > MAX_IMAGE_DATA_URL_LENGTH) throw new Error("Image too large.");
+      setImageDataUrl(dataUrl);
+      setFeedback("");
+    } catch {
+      setImageDataUrl(null);
+      setFeedback(muralCopy.photoError);
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  async function submitNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedAuthor = author.trim();
     const trimmedNote = note.trim();
     if (!trimmedAuthor || !trimmedNote) return;
+
+    const position = findOpenPosition(messages, boardRef.current, Boolean(imageDataUrl));
 
     setSaving(true);
     setFeedback("");
@@ -616,7 +692,13 @@ function MuralPage({
       const response = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ author: trimmedAuthor, message: trimmedNote }),
+        body: JSON.stringify({
+          author: trimmedAuthor,
+          message: trimmedNote,
+          x: position.x,
+          y: position.y,
+          imageDataUrl,
+        }),
       });
 
       const data = (await response.json()) as { message?: MuralMessage; error?: string };
@@ -625,14 +707,87 @@ function MuralPage({
         return;
       }
 
-      setMessages((current) => [data.message as MuralMessage, ...current]);
+      setMessages((current) => [normalizeMuralMessage(data.message as MuralMessage), ...current]);
       setAuthor("");
       setNote("");
+      setImageDataUrl(null);
       setFeedback(muralCopy.saved);
     } catch {
       setFeedback(muralCopy.saveError);
     } finally {
       setSaving(false);
+    }
+  }
+
+  function startDrag(event: ReactPointerEvent<HTMLElement>, muralMessage: MuralMessage) {
+    const board = boardRef.current;
+    if (!board || event.button !== 0) return;
+
+    const noteElement = event.currentTarget;
+    const visualX = (noteElement.offsetLeft / board.clientWidth) * 100;
+    const visualY = (noteElement.offsetTop / board.clientHeight) * 100;
+    noteElement.setPointerCapture(event.pointerId);
+    setFeedback("");
+    setMessages((current) =>
+      current.map((item) => item.id === muralMessage.id ? { ...item, x: visualX, y: visualY } : item),
+    );
+    setDragging({
+      id: muralMessage.id,
+      pointerId: event.pointerId,
+      startPointerX: event.clientX,
+      startPointerY: event.clientY,
+      startX: visualX,
+      startY: visualY,
+      lastX: visualX,
+      lastY: visualY,
+      width: noteElement.offsetWidth || NOTE_ESTIMATE.width,
+      height: noteElement.offsetHeight || NOTE_ESTIMATE.height,
+    });
+  }
+
+  function dragNote(event: ReactPointerEvent<HTMLElement>) {
+    if (!dragging || event.pointerId !== dragging.pointerId) return;
+    const board = boardRef.current;
+    if (!board) return;
+
+    const boardRect = board.getBoundingClientRect();
+    const x = dragging.startX + ((event.clientX - dragging.startPointerX) / boardRect.width) * 100;
+    const y = dragging.startY + ((event.clientY - dragging.startPointerY) / boardRect.height) * 100;
+    const next = clampNotePosition(x, y, dragging.width, dragging.height, boardRect.width, boardRect.height);
+
+    if (hasCrowdedOverlap(dragging.id, next.x, next.y, dragging.width, dragging.height, messages, boardRect)) {
+      setFeedback(muralCopy.moveError);
+      return;
+    }
+
+    setFeedback("");
+    setDragging((current) => current ? { ...current, lastX: next.x, lastY: next.y } : current);
+    setMessages((current) =>
+      current.map((item) => item.id === dragging.id ? { ...item, x: next.x, y: next.y } : item),
+    );
+  }
+
+  function endDrag(event: ReactPointerEvent<HTMLElement>) {
+    if (!dragging || event.pointerId !== dragging.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const finalPosition = { x: dragging.lastX, y: dragging.lastY };
+    const id = dragging.id;
+    setDragging(null);
+    void persistPosition(id, finalPosition.x, finalPosition.y);
+  }
+
+  async function persistPosition(id: number, x: number, y: number) {
+    try {
+      const response = await fetch(`/api/messages/${id}/position`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ x, y }),
+      });
+      if (!response.ok) throw new Error("Could not save position.");
+    } catch {
+      setFeedback(muralCopy.saveError);
     }
   }
 
@@ -679,6 +834,33 @@ function MuralPage({
               rows={6}
               value={note}
             />
+
+            <div className="photo-picker">
+              <div>
+                <label>{muralCopy.photoLabel}</label>
+                <p>{muralCopy.photoHint}</p>
+              </div>
+              <input
+                accept="image/*"
+                className="visually-hidden"
+                onChange={handleImageChange}
+                ref={fileInputRef}
+                type="file"
+              />
+              <button className="ghost-link" onClick={() => fileInputRef.current?.click()} type="button">
+                {muralCopy.photoButton}
+              </button>
+            </div>
+
+            {imageDataUrl && (
+              <div className="photo-preview">
+                <img src={imageDataUrl} alt="Selected memory" />
+                <button className="modal-close" onClick={() => setImageDataUrl(null)} type="button" aria-label={muralCopy.removePhoto}>
+                  ×
+                </button>
+              </div>
+            )}
+
             <div className="form-footer">
               <span>{muralCopy.characterCount(note.length)}</span>
               <button className="confirm-button" disabled={saving || !author.trim() || !note.trim()} type="submit">
@@ -695,6 +877,7 @@ function MuralPage({
           <p className="kicker">{muralCopy.boardKicker}</p>
           <h2 id="notes-title">{muralCopy.boardTitle}</h2>
           <p>{muralCopy.boardText}</p>
+          <p className="drag-hint">{muralCopy.dragHint}</p>
         </div>
 
         {!loading && messages.length === 0 ? (
@@ -704,19 +887,40 @@ function MuralPage({
             <p>{muralCopy.emptyText}</p>
           </div>
         ) : (
-          <div className="notes-board" aria-busy={loading}>
+          <div className="notes-board" aria-busy={loading} ref={boardRef}>
+            <div className="board-glow" aria-hidden="true" />
             {loading
-              ? Array.from({ length: 6 }, (_, index) => <div className="sticky-note skeleton-note" key={index} />)
+              ? Array.from({ length: 6 }, (_, index) => (
+                  <div
+                    className="sticky-note skeleton-note"
+                    key={index}
+                    style={{
+                      "--note-left": `${[5, 38, 67, 14, 50, 75][index]}%`,
+                      "--note-top": `${[8, 13, 9, 54, 48, 60][index]}%`,
+                    } as CSSProperties}
+                  />
+                ))
               : messages.map((muralMessage, index) => (
                   <article
-                    className="sticky-note"
+                    className={`sticky-note draggable-note ${dragging?.id === muralMessage.id ? "is-dragging" : ""}`}
+                    data-note-id={muralMessage.id}
                     key={muralMessage.id}
+                    onPointerCancel={endDrag}
+                    onPointerDown={(event) => startDrag(event, muralMessage)}
+                    onPointerMove={dragNote}
+                    onPointerUp={endDrag}
                     style={{
                       "--tilt": `${[-2.2, 1.5, -0.6, 2.1, -1.4, 0.9][index % 6]}deg`,
                       "--delay": `${Math.min(index, 10) * 70}ms`,
+                      "--note-left": `${muralMessage.x}%`,
+                      "--note-top": `${muralMessage.y}%`,
+                      zIndex: dragging?.id === muralMessage.id ? 8 : 1 + index,
                     } as CSSProperties}
                   >
                     <div className="pin" aria-hidden="true" />
+                    {muralMessage.imageDataUrl && (
+                      <img className="note-photo" src={muralMessage.imageDataUrl} alt="Birthday memory" draggable={false} />
+                    )}
                     <p>{muralMessage.message}</p>
                     <footer>
                       <strong>{muralMessage.author}</strong>
@@ -729,6 +933,138 @@ function MuralPage({
       </section>
     </main>
   );
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function normalizeMuralMessage(message: MuralMessage): MuralMessage {
+  return {
+    ...message,
+    x: clamp(Number(message.x ?? 8), 0, 92),
+    y: clamp(Number(message.y ?? 8), 0, 92),
+    imageDataUrl: message.imageDataUrl || null,
+  };
+}
+
+
+function arrangeMessages(messages: MuralMessage[], board: HTMLDivElement | null) {
+  const boardRect = board?.getBoundingClientRect();
+  const boardWidth = boardRect?.width || 1060;
+  const boardHeight = boardRect?.height || 760;
+  const placed: MuralMessage[] = [];
+  const changed: Array<{ id: number; x: number; y: number }> = [];
+
+  messages.forEach((message) => {
+    const width = Math.min(NOTE_ESTIMATE.width, boardWidth * 0.86);
+    const height = message.imageDataUrl ? 372 : NOTE_ESTIMATE.height;
+    const crowded = hasCrowdedOverlap(message.id, message.x, message.y, width, height, placed, {
+      width: boardWidth,
+      height: boardHeight,
+    });
+
+    if (!crowded) {
+      placed.push(message);
+      return;
+    }
+
+    const position = findOpenPosition(placed, board, Boolean(message.imageDataUrl));
+    const moved = { ...message, x: position.x, y: position.y };
+    placed.push(moved);
+    changed.push({ id: message.id, x: position.x, y: position.y });
+  });
+
+  return { messages: placed, changed };
+}
+
+function findOpenPosition(messages: MuralMessage[], board: HTMLDivElement | null, hasPhoto: boolean) {
+  const boardRect = board?.getBoundingClientRect();
+  const boardWidth = boardRect?.width || 1060;
+  const boardHeight = boardRect?.height || 760;
+  const width = Math.min(NOTE_ESTIMATE.width, boardWidth * 0.86);
+  const height = hasPhoto ? 372 : NOTE_ESTIMATE.height;
+  const columns = [4, 28, 52, 72, 12, 40, 64, 82];
+  const rows = [6, 36, 62, 18, 50, 72];
+
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    for (let colIndex = 0; colIndex < columns.length; colIndex += 1) {
+      const jitter = ((messages.length + rowIndex + colIndex) % 3) * 1.6;
+      const position = clampNotePosition(
+        columns[(colIndex + messages.length) % columns.length] + jitter,
+        rows[(rowIndex + messages.length) % rows.length] - jitter,
+        width,
+        height,
+        boardWidth,
+        boardHeight,
+      );
+      const crowded = hasCrowdedOverlap(-1, position.x, position.y, width, height, messages, {
+        width: boardWidth,
+        height: boardHeight,
+      });
+      if (!crowded) return position;
+    }
+  }
+
+  return clampNotePosition(7 + ((messages.length * 17) % 70), 8 + ((messages.length * 23) % 66), width, height, boardWidth, boardHeight);
+}
+
+function clampNotePosition(x: number, y: number, width: number, height: number, boardWidth: number, boardHeight: number) {
+  const maxX = Math.max(0, ((boardWidth - width) / boardWidth) * 100);
+  const maxY = Math.max(0, ((boardHeight - height) / boardHeight) * 100);
+  return { x: clamp(x, 0, maxX), y: clamp(y, 0, maxY) };
+}
+
+function hasCrowdedOverlap(
+  activeId: number,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  messages: MuralMessage[],
+  boardRect: Pick<DOMRect, "width" | "height">,
+) {
+  const activeRect = percentToRect(x, y, width, height, boardRect.width, boardRect.height);
+
+  return messages.some((message) => {
+    if (message.id === activeId) return false;
+    const otherHeight = message.imageDataUrl ? 372 : NOTE_ESTIMATE.height;
+    const otherRect = percentToRect(
+      message.x,
+      message.y,
+      Math.min(NOTE_ESTIMATE.width, boardRect.width * 0.86),
+      otherHeight,
+      boardRect.width,
+      boardRect.height,
+    );
+    return getOverlapRatio(activeRect, otherRect) > MAX_NOTE_OVERLAP;
+  });
+}
+
+function percentToRect(x: number, y: number, width: number, height: number, boardWidth: number, boardHeight: number): Rect {
+  return {
+    left: (x / 100) * boardWidth,
+    top: (y / 100) * boardHeight,
+    width,
+    height,
+  };
+}
+
+function getOverlapRatio(a: Rect, b: Rect) {
+  const overlapWidth = Math.max(0, Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left));
+  const overlapHeight = Math.max(0, Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top));
+  const overlapArea = overlapWidth * overlapHeight;
+  if (!overlapArea) return 0;
+  return overlapArea / Math.min(a.width * a.height, b.width * b.height);
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function LanguageToggle({

@@ -12,6 +12,8 @@ Incluye:
 - Confirmación con clave antes de guardar.
 - Elección irreversible persistida en PostgreSQL local.
 - Ruta `/mural` para que amigas, amigos y familia dejen mensajes de cumpleaños persistidos como notas tipo post-it.
+- Los post-its del mural se pueden mover dentro del tablero; la posición se guarda y el UI evita que se tapen más de ~10%.
+- Cada post-it puede incluir una imagen opcional, persistida junto al mensaje.
 
 ## Requisitos
 
@@ -69,7 +71,7 @@ Los archivos estáticos quedan en `dist/`.
 ## Rutas
 
 - `/` — countdown, fotos y selección de destino.
-- `/mural` — mural de mensajes de cumpleaños para Noemi.
+- `/mural` — mural de mensajes de cumpleaños para Noemi, con notas movibles e imagen opcional.
 
 ## Resetear datos durante pruebas
 
@@ -79,7 +81,7 @@ Si necesitas borrar la elección local mientras pruebas:
 psql postgres://localhost:5432/noemi_birthday -c "DELETE FROM birthday_destination_choice;"
 ```
 
-Si necesitas borrar mensajes de prueba del mural:
+Si necesitas borrar mensajes o imágenes de prueba del mural:
 
 ```bash
 psql postgres://localhost:5432/noemi_birthday -c "DELETE FROM birthday_mural_messages;"
@@ -89,8 +91,8 @@ psql postgres://localhost:5432/noemi_birthday -c "DELETE FROM birthday_mural_mes
 
 - `src/App.tsx` — UI, rutas locales, contador, modal de clave, selección de destinos y mural.
 - `src/styles.css` — diseño visual, animaciones, confetti y globos.
-- `server/index.mjs` — API mínima para PostgreSQL (`/api/choice` y `/api/messages`).
-- `db/schema.sql` — tablas para la elección irreversible y mensajes del mural.
+- `server/index.mjs` — API mínima para PostgreSQL (`/api/choice`, `/api/messages` y guardado de posición de notas).
+- `db/schema.sql` — tablas para la elección irreversible y mensajes del mural, incluyendo posición e imagen opcional.
 - `public/birthday/` — fotos optimizadas de Noemi.
 
 ## Si la página no carga

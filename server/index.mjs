@@ -57,8 +57,18 @@ async function ensureSchema() {
       id BIGSERIAL PRIMARY KEY,
       author TEXT NOT NULL CHECK (char_length(trim(author)) BETWEEN 1 AND 80),
       message TEXT NOT NULL CHECK (char_length(trim(message)) BETWEEN 1 AND 500),
+      note_x NUMERIC(6, 3) NOT NULL DEFAULT 8,
+      note_y NUMERIC(6, 3) NOT NULL DEFAULT 8,
+      image_data_url TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `);
+
+  await pool.query(`
+    ALTER TABLE birthday_mural_messages
+      ADD COLUMN IF NOT EXISTS note_x NUMERIC(6, 3) NOT NULL DEFAULT 8,
+      ADD COLUMN IF NOT EXISTS note_y NUMERIC(6, 3) NOT NULL DEFAULT 8,
+      ADD COLUMN IF NOT EXISTS image_data_url TEXT;
   `);
 
   await pool.query(`
@@ -81,12 +91,26 @@ function toMuralMessage(row) {
     author: row.author,
     message: row.message,
     createdAt: row.created_at,
+    x: Number(row.note_x),
+    y: Number(row.note_y),
+    imageDataUrl: row.image_data_url ?? null,
   };
 }
 
-async function readJson(request) {
+async function readJson(request, maxBytes = 6_000_000) {
   const chunks = [];
-  for await (const chunk of request) chunks.push(chunk);
+  let totalBytes = 0;
+
+  for await (const chunk of request) {
+    totalBytes += chunk.length;
+    if (totalBytes > maxBytes) {
+      const error = new Error('Payload too large.');
+      error.statusCode = 413;
+      throw error;
+    }
+    chunks.push(chunk);
+  }
+
   if (!chunks.length) return {};
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
@@ -97,6 +121,18 @@ function sendJson(response, status, payload) {
     'cache-control': 'no-store',
   });
   response.end(JSON.stringify(payload));
+}
+
+function isValidPosition(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100;
+}
+
+function normalizeImageDataUrl(value) {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string') return null;
+  if (value.length > 3_500_000) return undefined;
+  if (!/^data:image\/(png|jpe?g|webp|gif|heic|heif);base64,/i.test(value)) return undefined;
+  return value;
 }
 
 async function handleApi(request, response, url) {
@@ -117,7 +153,7 @@ async function handleApi(request, response, url) {
   if (request.method === 'GET' && url.pathname === '/api/messages') {
     try {
       const result = await pool.query(
-        `SELECT id, author, message, created_at
+        `SELECT id, author, message, note_x, note_y, image_data_url, created_at
          FROM birthday_mural_messages
          ORDER BY created_at DESC, id DESC
          LIMIT 120`,
@@ -130,24 +166,59 @@ async function handleApi(request, response, url) {
 
   if (request.method === 'POST' && url.pathname === '/api/messages') {
     try {
-      const { author, message } = await readJson(request);
+      const { author, message, x, y, imageDataUrl } = await readJson(request);
       const cleanAuthor = typeof author === 'string' ? author.trim().replace(/\s+/g, ' ') : '';
       const cleanMessage = typeof message === 'string' ? message.trim() : '';
+      const cleanImageDataUrl = normalizeImageDataUrl(imageDataUrl);
 
-      if (!cleanAuthor || cleanAuthor.length > 80 || !cleanMessage || cleanMessage.length > 500) {
+      if (
+        !cleanAuthor ||
+        cleanAuthor.length > 80 ||
+        !cleanMessage ||
+        cleanMessage.length > 500 ||
+        !isValidPosition(x) ||
+        !isValidPosition(y) ||
+        cleanImageDataUrl === undefined
+      ) {
         return sendJson(response, 400, { error: 'Mensaje inválido.' });
       }
 
       const result = await pool.query(
-        `INSERT INTO birthday_mural_messages (author, message)
-         VALUES ($1, $2)
-         RETURNING id, author, message, created_at`,
-        [cleanAuthor, cleanMessage],
+        `INSERT INTO birthday_mural_messages (author, message, note_x, note_y, image_data_url)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, author, message, note_x, note_y, image_data_url, created_at`,
+        [cleanAuthor, cleanMessage, x, y, cleanImageDataUrl],
       );
 
       return sendJson(response, 201, { message: toMuralMessage(result.rows[0]) });
     } catch {
       return sendJson(response, 500, { error: 'No se pudo guardar el mensaje.' });
+    }
+  }
+
+
+  const positionMatch = url.pathname.match(/^\/api\/messages\/(\d+)\/position$/);
+  if (request.method === 'PATCH' && positionMatch) {
+    try {
+      const id = Number(positionMatch[1]);
+      const { x, y } = await readJson(request, 50_000);
+
+      if (!Number.isSafeInteger(id) || !isValidPosition(x) || !isValidPosition(y)) {
+        return sendJson(response, 400, { error: 'Posición inválida.' });
+      }
+
+      const result = await pool.query(
+        `UPDATE birthday_mural_messages
+         SET note_x = $1, note_y = $2
+         WHERE id = $3
+         RETURNING id, author, message, note_x, note_y, image_data_url, created_at`,
+        [x, y, id],
+      );
+
+      if (!result.rows[0]) return sendJson(response, 404, { error: 'Mensaje no encontrado.' });
+      return sendJson(response, 200, { message: toMuralMessage(result.rows[0]) });
+    } catch {
+      return sendJson(response, 500, { error: 'No se pudo mover la nota.' });
     }
   }
 
