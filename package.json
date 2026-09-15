@@ -14,6 +14,7 @@
     "stop:dev": "node scripts/free-dev-ports.mjs"
   },
   "dependencies": {
+    "heic2any": "^0.0.4",
     "pg": "8.16.3",
     "react": "19.2.6",
     "react-dom": "19.2.6"

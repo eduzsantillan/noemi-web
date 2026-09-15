@@ -14,6 +14,7 @@ Incluye:
 - Ruta `/mural` para que amigas, amigos y familia dejen mensajes de cumpleaños persistidos como notas tipo post-it.
 - Los post-its del mural se pueden mover dentro del tablero; la posición se guarda y el UI evita que se tapen más de ~10%.
 - Cada post-it puede incluir una imagen opcional, persistida junto al mensaje.
+- Fotos HEIC/HEIF de iPhone se convierten a JPG antes de recortar/comprimir cuando el navegador lo permite.
 
 ## Requisitos
 

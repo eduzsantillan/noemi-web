@@ -673,7 +673,7 @@ function MuralPage({
     if (!file) return;
 
     try {
-      if (!file.type.startsWith("image/")) throw new Error("Not an image.");
+      if (!isSupportedPhotoFile(file)) throw new Error("Not an image.");
       const dataUrl = await prepareImageForNote(file);
       if (dataUrl.length > MAX_IMAGE_DATA_URL_LENGTH) throw new Error("Image too large.");
       setImageDataUrl(dataUrl);
@@ -879,7 +879,7 @@ function MuralPage({
                 <span className="photo-label">{muralCopy.photoLabel}</span>
               </div>
               <input
-                accept="image/*"
+                accept="image/*,.heic,.heif"
                 className="visually-hidden"
                 onChange={handleImageChange}
                 ref={fileInputRef}
@@ -962,8 +962,26 @@ function MuralPage({
   );
 }
 
+
+function isSupportedPhotoFile(file: File) {
+  return file.type.startsWith("image/") || isHeicFile(file);
+}
+
+function isHeicFile(file: File) {
+  const fileName = file.name.toLowerCase();
+  return file.type === "image/heic" || file.type === "image/heif" || fileName.endsWith(".heic") || fileName.endsWith(".heif");
+}
+
+async function convertHeicToJpeg(file: File) {
+  const { default: heic2any } = await import("heic2any");
+  const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.82 });
+  const blob = Array.isArray(converted) ? converted[0] : converted;
+  return new File([blob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" });
+}
+
 async function prepareImageForNote(file: File) {
-  const sourceDataUrl = await readFileAsDataUrl(file);
+  const processableFile = isHeicFile(file) ? await convertHeicToJpeg(file) : file;
+  const sourceDataUrl = await readFileAsDataUrl(processableFile);
 
   try {
     const image = await loadImage(sourceDataUrl);
