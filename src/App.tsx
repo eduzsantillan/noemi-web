@@ -592,6 +592,7 @@ const NOTE_ESTIMATE = { width: 272, height: 286 };
 type DragState = {
   id: number;
   pointerId: number;
+  element: HTMLElement;
   startPointerX: number;
   startPointerY: number;
   startX: number;
@@ -627,8 +628,9 @@ function MuralPage({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [dragging, setDragging] = useState<DragState | null>(null);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
+  const dragStateRef = useRef<DragState | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const muralCopy = t.mural;
 
@@ -727,13 +729,14 @@ function MuralPage({
     const visualX = (noteElement.offsetLeft / board.clientWidth) * 100;
     const visualY = (noteElement.offsetTop / board.clientHeight) * 100;
     noteElement.setPointerCapture(event.pointerId);
+    noteElement.style.setProperty("--note-left", `${visualX}%`);
+    noteElement.style.setProperty("--note-top", `${visualY}%`);
     setFeedback("");
-    setMessages((current) =>
-      current.map((item) => item.id === muralMessage.id ? { ...item, x: visualX, y: visualY } : item),
-    );
-    setDragging({
+    setDraggingId(muralMessage.id);
+    dragStateRef.current = {
       id: muralMessage.id,
       pointerId: event.pointerId,
+      element: noteElement,
       startPointerX: event.clientX,
       startPointerY: event.clientY,
       startX: visualX,
@@ -742,10 +745,11 @@ function MuralPage({
       lastY: visualY,
       width: noteElement.offsetWidth || NOTE_ESTIMATE.width,
       height: noteElement.offsetHeight || NOTE_ESTIMATE.height,
-    });
+    };
   }
 
   function dragNote(event: ReactPointerEvent<HTMLElement>) {
+    const dragging = dragStateRef.current;
     if (!dragging || event.pointerId !== dragging.pointerId) return;
     const board = boardRef.current;
     if (!board) return;
@@ -760,21 +764,26 @@ function MuralPage({
       return;
     }
 
+    dragging.lastX = next.x;
+    dragging.lastY = next.y;
+    dragging.element.style.setProperty("--note-left", `${next.x}%`);
+    dragging.element.style.setProperty("--note-top", `${next.y}%`);
     setFeedback("");
-    setDragging((current) => current ? { ...current, lastX: next.x, lastY: next.y } : current);
-    setMessages((current) =>
-      current.map((item) => item.id === dragging.id ? { ...item, x: next.x, y: next.y } : item),
-    );
   }
 
   function endDrag(event: ReactPointerEvent<HTMLElement>) {
+    const dragging = dragStateRef.current;
     if (!dragging || event.pointerId !== dragging.pointerId) return;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     const finalPosition = { x: dragging.lastX, y: dragging.lastY };
     const id = dragging.id;
-    setDragging(null);
+    dragStateRef.current = null;
+    setDraggingId(null);
+    setMessages((current) =>
+      current.map((item) => item.id === id ? { ...item, x: finalPosition.x, y: finalPosition.y } : item),
+    );
     void persistPosition(id, finalPosition.x, finalPosition.y);
   }
 
@@ -792,28 +801,30 @@ function MuralPage({
   }
 
   return (
-    <main className="birthday-page mural-page">
+    <main className="birthday-page mural-page mural-fullscreen">
       <div className="silk silk-one" />
       <div className="silk silk-two" />
       <div className="mural-orb mural-orb-one" aria-hidden="true" />
       <div className="mural-orb mural-orb-two" aria-hidden="true" />
 
-      <section className="mural-hero" aria-labelledby="mural-title">
-        <div className="topline mural-topline">
+      <section className="mural-screen" aria-labelledby="notes-title">
+        <div className="topline mural-topline mural-topbar">
           <button className="ghost-link" onClick={() => onNavigate("/")} type="button">
             ← {t.nav.home}
           </button>
           <LanguageToggle language={language} onChange={onLanguageChange} />
         </div>
 
-        <div className="mural-hero-grid">
-          <div className="mural-copy-card">
-            <p className="kicker">{muralCopy.routeKicker}</p>
-            <h1 id="mural-title">{muralCopy.title}</h1>
-            <p className="intro-copy">{muralCopy.intro}</p>
+        <div className="notes-board fullscreen-board" aria-busy={loading} ref={boardRef}>
+          <div className="board-glow" aria-hidden="true" />
+          <div className="mural-board-intro">
+            <p className="kicker">{muralCopy.boardKicker}</p>
+            <h1 id="notes-title">{muralCopy.boardTitle}</h1>
+            <p>{muralCopy.boardText}</p>
+            <p className="drag-hint">{muralCopy.dragHint}</p>
           </div>
 
-          <form className="note-form" onSubmit={submitNote}>
+          <form className="note-form mural-composer" onSubmit={submitNote}>
             <p className="kicker">{muralCopy.formKicker}</p>
             <label htmlFor="mural-author">{muralCopy.nameLabel}</label>
             <input
@@ -831,11 +842,11 @@ function MuralPage({
               maxLength={500}
               onChange={(event) => setNote(event.target.value)}
               placeholder={muralCopy.messagePlaceholder}
-              rows={6}
+              rows={4}
               value={note}
             />
 
-            <div className="photo-picker">
+            <div className="photo-picker compact-photo-picker">
               <div>
                 <label>{muralCopy.photoLabel}</label>
                 <p>{muralCopy.photoHint}</p>
@@ -845,6 +856,7 @@ function MuralPage({
                 className="visually-hidden"
                 onChange={handleImageChange}
                 ref={fileInputRef}
+                tabIndex={-1}
                 type="file"
               />
               <button className="ghost-link" onClick={() => fileInputRef.current?.click()} type="button">
@@ -853,7 +865,7 @@ function MuralPage({
             </div>
 
             {imageDataUrl && (
-              <div className="photo-preview">
+              <div className="photo-preview compact-photo-preview">
                 <img src={imageDataUrl} alt="Selected memory" />
                 <button className="modal-close" onClick={() => setImageDataUrl(null)} type="button" aria-label={muralCopy.removePhoto}>
                   ×
@@ -869,67 +881,54 @@ function MuralPage({
             </div>
             {feedback && <p className="status-message mural-feedback" role="status">{feedback}</p>}
           </form>
-        </div>
-      </section>
 
-      <section className="notes-section reveal-block" aria-labelledby="notes-title">
-        <div className="section-heading notes-heading">
-          <p className="kicker">{muralCopy.boardKicker}</p>
-          <h2 id="notes-title">{muralCopy.boardTitle}</h2>
-          <p>{muralCopy.boardText}</p>
-          <p className="drag-hint">{muralCopy.dragHint}</p>
-        </div>
+          {!loading && messages.length === 0 && (
+            <div className="empty-mural empty-mural-floating">
+              <span>✦</span>
+              <h3>{muralCopy.emptyTitle}</h3>
+              <p>{muralCopy.emptyText}</p>
+            </div>
+          )}
 
-        {!loading && messages.length === 0 ? (
-          <div className="empty-mural">
-            <span>✦</span>
-            <h3>{muralCopy.emptyTitle}</h3>
-            <p>{muralCopy.emptyText}</p>
-          </div>
-        ) : (
-          <div className="notes-board" aria-busy={loading} ref={boardRef}>
-            <div className="board-glow" aria-hidden="true" />
-            {loading
-              ? Array.from({ length: 6 }, (_, index) => (
-                  <div
-                    className="sticky-note skeleton-note"
-                    key={index}
-                    style={{
-                      "--note-left": `${[5, 38, 67, 14, 50, 75][index]}%`,
-                      "--note-top": `${[8, 13, 9, 54, 48, 60][index]}%`,
-                    } as CSSProperties}
-                  />
-                ))
-              : messages.map((muralMessage, index) => (
-                  <article
-                    className={`sticky-note draggable-note ${dragging?.id === muralMessage.id ? "is-dragging" : ""}`}
-                    data-note-id={muralMessage.id}
-                    key={muralMessage.id}
-                    onPointerCancel={endDrag}
-                    onPointerDown={(event) => startDrag(event, muralMessage)}
-                    onPointerMove={dragNote}
-                    onPointerUp={endDrag}
-                    style={{
-                      "--tilt": `${[-2.2, 1.5, -0.6, 2.1, -1.4, 0.9][index % 6]}deg`,
-                      "--delay": `${Math.min(index, 10) * 70}ms`,
-                      "--note-left": `${muralMessage.x}%`,
-                      "--note-top": `${muralMessage.y}%`,
-                      zIndex: dragging?.id === muralMessage.id ? 8 : 1 + index,
-                    } as CSSProperties}
-                  >
-                    <div className="pin" aria-hidden="true" />
-                    {muralMessage.imageDataUrl && (
-                      <img className="note-photo" src={muralMessage.imageDataUrl} alt="Birthday memory" draggable={false} />
-                    )}
-                    <p>{muralMessage.message}</p>
-                    <footer>
-                      <strong>{muralMessage.author}</strong>
-                      <span>{muralCopy.noteDate(new Date(muralMessage.createdAt))}</span>
-                    </footer>
-                  </article>
-                ))}
-          </div>
-        )}
+          {loading
+            ? Array.from({ length: 6 }, (_, index) => (
+                <div
+                  className="sticky-note skeleton-note"
+                  key={index}
+                  style={{
+                    "--note-left": `${[7, 34, 58, 16, 46, 70][index]}%`,
+                    "--note-top": `${[42, 38, 40, 68, 64, 70][index]}%`,
+                  } as CSSProperties}
+                />
+              ))
+            : messages.map((muralMessage, index) => (
+                <article
+                  className={`sticky-note draggable-note ${draggingId === muralMessage.id ? "is-dragging" : ""}`}
+                  data-note-id={muralMessage.id}
+                  key={muralMessage.id}
+                  onPointerCancel={endDrag}
+                  onPointerDown={(event) => startDrag(event, muralMessage)}
+                  onPointerMove={dragNote}
+                  onPointerUp={endDrag}
+                  style={{
+                    "--tilt": `${[-2.2, 1.5, -0.6, 2.1, -1.4, 0.9][index % 6]}deg`,
+                    "--delay": `${Math.min(index, 10) * 70}ms`,
+                    "--note-left": `${muralMessage.x}%`,
+                    "--note-top": `${muralMessage.y}%`,
+                    zIndex: draggingId === muralMessage.id ? 12 : 1 + index,
+                  } as CSSProperties}
+                >
+                  <div className="pin" aria-hidden="true" />
+                  {muralMessage.imageDataUrl && (
+                    <img className="note-photo" src={muralMessage.imageDataUrl} alt="Birthday memory" draggable={false} />
+                  )}
+                  <p>{muralMessage.message}</p>
+                  <footer>
+                    <strong>{muralMessage.author}</strong>
+                  </footer>
+                </article>
+              ))}
+        </div>
       </section>
     </main>
   );
@@ -968,8 +967,9 @@ function arrangeMessages(messages: MuralMessage[], board: HTMLDivElement | null)
       width: boardWidth,
       height: boardHeight,
     });
+    const isProtected = isInProtectedMuralZone(message.x, message.y);
 
-    if (!crowded) {
+    if (!crowded && !isProtected) {
       placed.push(message);
       return;
     }
@@ -989,8 +989,8 @@ function findOpenPosition(messages: MuralMessage[], board: HTMLDivElement | null
   const boardHeight = boardRect?.height || 760;
   const width = Math.min(NOTE_ESTIMATE.width, boardWidth * 0.86);
   const height = hasPhoto ? 372 : NOTE_ESTIMATE.height;
-  const columns = [4, 28, 52, 72, 12, 40, 64, 82];
-  const rows = [6, 36, 62, 18, 50, 72];
+  const columns = [5, 29, 52, 8, 35, 58, 70, 18, 46];
+  const rows = [39, 63, 73, 48, 24, 57];
 
   for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
     for (let colIndex = 0; colIndex < columns.length; colIndex += 1) {
@@ -1007,11 +1007,18 @@ function findOpenPosition(messages: MuralMessage[], board: HTMLDivElement | null
         width: boardWidth,
         height: boardHeight,
       });
-      if (!crowded) return position;
+      if (!crowded && !isInProtectedMuralZone(position.x, position.y)) return position;
     }
   }
 
   return clampNotePosition(7 + ((messages.length * 17) % 70), 8 + ((messages.length * 23) % 66), width, height, boardWidth, boardHeight);
+}
+
+
+function isInProtectedMuralZone(x: number, y: number) {
+  const introZone = x < 55 && y < 30;
+  const composerZone = x > 61 && y < 63;
+  return introZone || composerZone;
 }
 
 function clampNotePosition(x: number, y: number, width: number, height: number, boardWidth: number, boardHeight: number) {
