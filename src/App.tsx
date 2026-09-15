@@ -597,8 +597,12 @@ type DragState = {
   startPointerY: number;
   startX: number;
   startY: number;
+  startLeftPx: number;
+  startTopPx: number;
   lastX: number;
   lastY: number;
+  lastValidX: number;
+  lastValidY: number;
   width: number;
   height: number;
 };
@@ -723,7 +727,7 @@ function MuralPage({
 
   function startDrag(event: ReactPointerEvent<HTMLElement>, muralMessage: MuralMessage) {
     const board = boardRef.current;
-    if (!board || event.button !== 0) return;
+    if (!board || (event.pointerType === "mouse" && event.button !== 0)) return;
 
     const noteElement = event.currentTarget;
     const visualX = (noteElement.offsetLeft / board.clientWidth) * 100;
@@ -731,6 +735,8 @@ function MuralPage({
     noteElement.setPointerCapture(event.pointerId);
     noteElement.style.setProperty("--note-left", `${visualX}%`);
     noteElement.style.setProperty("--note-top", `${visualY}%`);
+    noteElement.style.setProperty("--drag-x", "0px");
+    noteElement.style.setProperty("--drag-y", "0px");
     setFeedback("");
     setDraggingId(muralMessage.id);
     dragStateRef.current = {
@@ -741,8 +747,12 @@ function MuralPage({
       startPointerY: event.clientY,
       startX: visualX,
       startY: visualY,
+      startLeftPx: noteElement.offsetLeft,
+      startTopPx: noteElement.offsetTop,
       lastX: visualX,
       lastY: visualY,
+      lastValidX: visualX,
+      lastValidY: visualY,
       width: noteElement.offsetWidth || NOTE_ESTIMATE.width,
       height: noteElement.offsetHeight || NOTE_ESTIMATE.height,
     };
@@ -755,20 +765,25 @@ function MuralPage({
     if (!board) return;
 
     const boardRect = board.getBoundingClientRect();
-    const x = dragging.startX + ((event.clientX - dragging.startPointerX) / boardRect.width) * 100;
-    const y = dragging.startY + ((event.clientY - dragging.startPointerY) / boardRect.height) * 100;
-    const next = clampNotePosition(x, y, dragging.width, dragging.height, boardRect.width, boardRect.height);
-
-    if (hasCrowdedOverlap(dragging.id, next.x, next.y, dragging.width, dragging.height, messages, boardRect)) {
-      setFeedback(muralCopy.moveError);
-      return;
-    }
+    const maxLeft = Math.max(0, boardRect.width - dragging.width);
+    const maxTop = Math.max(0, boardRect.height - dragging.height);
+    const nextLeftPx = clamp(dragging.startLeftPx + event.clientX - dragging.startPointerX, 0, maxLeft);
+    const nextTopPx = clamp(dragging.startTopPx + event.clientY - dragging.startPointerY, 0, maxTop);
+    const next = {
+      x: (nextLeftPx / boardRect.width) * 100,
+      y: (nextTopPx / boardRect.height) * 100,
+    };
 
     dragging.lastX = next.x;
     dragging.lastY = next.y;
-    dragging.element.style.setProperty("--note-left", `${next.x}%`);
-    dragging.element.style.setProperty("--note-top", `${next.y}%`);
-    setFeedback("");
+
+    if (!hasCrowdedOverlap(dragging.id, next.x, next.y, dragging.width, dragging.height, messages, boardRect)) {
+      dragging.lastValidX = next.x;
+      dragging.lastValidY = next.y;
+    }
+
+    dragging.element.style.setProperty("--drag-x", `${nextLeftPx - dragging.startLeftPx}px`);
+    dragging.element.style.setProperty("--drag-y", `${nextTopPx - dragging.startTopPx}px`);
   }
 
   function endDrag(event: ReactPointerEvent<HTMLElement>) {
@@ -777,8 +792,18 @@ function MuralPage({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    const finalPosition = { x: dragging.lastX, y: dragging.lastY };
+
+    const board = boardRef.current;
+    const boardRect = board?.getBoundingClientRect();
+    const finalPosition = boardRect && hasCrowdedOverlap(dragging.id, dragging.lastX, dragging.lastY, dragging.width, dragging.height, messages, boardRect)
+      ? { x: dragging.lastValidX, y: dragging.lastValidY }
+      : { x: dragging.lastX, y: dragging.lastY };
     const id = dragging.id;
+
+    dragging.element.style.setProperty("--drag-x", "0px");
+    dragging.element.style.setProperty("--drag-y", "0px");
+    dragging.element.style.setProperty("--note-left", `${finalPosition.x}%`);
+    dragging.element.style.setProperty("--note-top", `${finalPosition.y}%`);
     dragStateRef.current = null;
     setDraggingId(null);
     setMessages((current) =>
@@ -795,8 +820,8 @@ function MuralPage({
         body: JSON.stringify({ x, y }),
       });
       if (!response.ok) throw new Error("Could not save position.");
-    } catch {
-      setFeedback(muralCopy.saveError);
+    } catch (error) {
+      console.warn("Could not save note position", error);
     }
   }
 
@@ -907,6 +932,7 @@ function MuralPage({
                   data-note-id={muralMessage.id}
                   key={muralMessage.id}
                   onPointerCancel={endDrag}
+                  onDragStart={(event) => event.preventDefault()}
                   onPointerDown={(event) => startDrag(event, muralMessage)}
                   onPointerMove={dragNote}
                   onPointerUp={endDrag}

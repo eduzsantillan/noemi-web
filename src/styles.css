@@ -1682,3 +1682,19 @@ h1 {
     bottom: auto;
   }
 }
+
+/* Smoother, cursor-true post-it dragging */
+.draggable-note {
+  transform: translate3d(var(--drag-x, 0px), var(--drag-y, 0px), 0) rotate(var(--tilt, -1deg));
+  transition: transform 170ms cubic-bezier(.2,.8,.2,1), box-shadow 170ms ease, filter 170ms ease;
+  will-change: transform;
+}
+
+.draggable-note:not(.is-dragging):hover {
+  transform: translate3d(0, -7px, 0) rotate(0deg) scale(1.015);
+}
+
+.draggable-note.is-dragging {
+  transform: translate3d(var(--drag-x, 0px), var(--drag-y, 0px), 0) rotate(0deg) scale(1.045);
+  transition: box-shadow 150ms ease, filter 150ms ease;
+}
