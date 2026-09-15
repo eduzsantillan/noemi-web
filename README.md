@@ -1,25 +1,81 @@
-# Noemi’s Kiss Form
+# Cumpleaños de Noemi
 
-A mobile-first, animated, funny React + Vite site personalized for Noemi.
+Página web local en React + Vite para el cumpleaños de Noemi.
 
-## Run locally
+Incluye:
+
+- Contador hasta el **20 de noviembre de 2026**.
+- El 20 de noviembre muestra confetti y lluvia de globos.
+- Galería animada con fotos de Noemi.
+- Lista de destinos para escoger.
+- Confirmación con clave antes de guardar.
+- Elección irreversible persistida en PostgreSQL local.
+
+## Requisitos
+
+- Node.js
+- PostgreSQL local
+
+## Configurar PostgreSQL
+
+Crea la base de datos local:
+
+```bash
+createdb noemi_birthday
+```
+
+Copia el archivo de entorno:
+
+```bash
+cp .env.example .env
+```
+
+Por defecto usa:
+
+```env
+DATABASE_URL=postgres://localhost:5432/noemi_birthday
+DESTINATION_SECRET=eduardomirey
+PORT=4311
+```
+
+El servidor crea la tabla automáticamente al iniciar. También puedes correr manualmente:
+
+```bash
+psql postgres://localhost:5432/noemi_birthday -f db/schema.sql
+```
+
+## Ejecutar en desarrollo
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Build for upload
+- Web: `http://localhost:5174`
+- API: `http://localhost:4311`
+
+## Build para subir
 
 ```bash
 npm run build
 ```
 
-The production files will be generated in `dist/`. Upload the contents of `dist/` to your static hosting provider.
+Los archivos estáticos quedan en `dist/`.
 
-## Project structure
+> Importante: como la elección se guarda en PostgreSQL, además del build estático necesitas correr el servidor Node (`npm start`) en donde tengas la base de datos. Una app React en el navegador no puede conectarse de forma segura directamente a PostgreSQL.
 
-- `src/App.tsx` — main kiss-form interaction
-- `src/styles.css` — full design and animations
-- `public/noemi/` — optimized photos used in the page
-- `index.html` — Vite HTML entry
+## Resetear la elección durante pruebas
+
+Si necesitas borrar la elección local mientras pruebas:
+
+```bash
+psql postgres://localhost:5432/noemi_birthday -c "DELETE FROM birthday_destination_choice;"
+```
+
+## Estructura
+
+- `src/App.tsx` — UI, contador, modal de clave y selección de destinos.
+- `src/styles.css` — diseño visual, animaciones, confetti y globos.
+- `server/index.mjs` — API mínima para PostgreSQL.
+- `db/schema.sql` — tabla de elección irreversible.
+- `public/birthday/` — fotos optimizadas de Noemi.
