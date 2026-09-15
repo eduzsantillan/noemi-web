@@ -782,7 +782,7 @@ function MuralPage({
 
     const isValidSpot =
       !hasCrowdedOverlap(dragging.id, next.x, next.y, dragging.width, dragging.height, messages, boardRect) &&
-      !isInProtectedMuralZone(next.x, next.y);
+      !isInProtectedMuralZone(next.x, next.y, dragging.width, dragging.height, board);
 
     if (isValidSpot) {
       dragging.lastValidX = next.x;
@@ -804,7 +804,7 @@ function MuralPage({
     const boardRect = board?.getBoundingClientRect();
     const isFinalSpotBlocked = boardRect
       ? hasCrowdedOverlap(dragging.id, dragging.lastX, dragging.lastY, dragging.width, dragging.height, messages, boardRect) ||
-        isInProtectedMuralZone(dragging.lastX, dragging.lastY)
+        isInProtectedMuralZone(dragging.lastX, dragging.lastY, dragging.width, dragging.height, board)
       : false;
     const finalPosition = isFinalSpotBlocked
       ? { x: dragging.lastValidX, y: dragging.lastValidY }
@@ -1106,7 +1106,7 @@ function arrangeMessages(messages: MuralMessage[], board: HTMLDivElement | null)
       width: boardWidth,
       height: boardHeight,
     });
-    const isProtected = isInProtectedMuralZone(message.x, message.y);
+    const isProtected = isInProtectedMuralZone(message.x, message.y, width, height, board);
 
     if (!crowded && !isProtected) {
       placed.push(message);
@@ -1146,7 +1146,7 @@ function findOpenPosition(messages: MuralMessage[], board: HTMLDivElement | null
         width: boardWidth,
         height: boardHeight,
       });
-      if (!crowded && !isInProtectedMuralZone(position.x, position.y)) return position;
+      if (!crowded && !isInProtectedMuralZone(position.x, position.y, width, height, board)) return position;
     }
   }
 
@@ -1154,10 +1154,60 @@ function findOpenPosition(messages: MuralMessage[], board: HTMLDivElement | null
 }
 
 
-function isInProtectedMuralZone(x: number, y: number) {
-  const introZone = x < 55 && y < 30;
-  const composerZone = x > 61 && y < 63;
-  return introZone || composerZone;
+type ProtectedRect = Rect & { kind: "intro" | "composer" };
+
+function isInProtectedMuralZone(
+  x: number,
+  y: number,
+  width = NOTE_ESTIMATE.width,
+  height = NOTE_ESTIMATE.height,
+  board: HTMLDivElement | null = null,
+) {
+  const boardRect = board?.getBoundingClientRect();
+  const boardSize = { width: boardRect?.width || 1060, height: boardRect?.height || 760 };
+  const noteRect = percentToRect(x, y, width, height, boardSize.width, boardSize.height);
+
+  return getProtectedMuralRects(board, boardSize).some((protectedRect) => {
+    const allowedOverlap = protectedRect.kind === "intro" ? 0.34 : 0.08;
+    return getOverlapRatio(noteRect, protectedRect) > allowedOverlap;
+  });
+}
+
+function getProtectedMuralRects(
+  board: HTMLDivElement | null,
+  boardSize: Pick<DOMRect, "width" | "height">,
+): ProtectedRect[] {
+  if (!board) {
+    const composerWidth = Math.min(360, boardSize.width * 0.24);
+    return [
+      {
+        kind: "intro",
+        left: 0,
+        top: 0,
+        width: Math.min(380, boardSize.width * 0.22),
+        height: Math.min(230, boardSize.height * 0.28),
+      },
+      {
+        kind: "composer",
+        left: Math.max(0, boardSize.width - composerWidth - 28),
+        top: 0,
+        width: composerWidth + 28,
+        height: Math.min(460, boardSize.height * 0.48),
+      },
+    ];
+  }
+
+  const boardBounds = board.getBoundingClientRect();
+  return Array.from(board.querySelectorAll<HTMLElement>(".mural-board-intro, .mural-composer")).map((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      kind: element.classList.contains("mural-composer") ? "composer" : "intro",
+      left: rect.left - boardBounds.left,
+      top: rect.top - boardBounds.top,
+      width: rect.width,
+      height: rect.height,
+    };
+  });
 }
 
 function clampNotePosition(x: number, y: number, width: number, height: number, boardWidth: number, boardHeight: number) {
