@@ -1,9 +1,10 @@
 # Cumpleaños de Noemi
 
-Página web local en React + Vite para el cumpleaños de Noemi.
+Página web local en React + Vite para el cumpleaños de Noemi. La experiencia abre principalmente en inglés e incluye un switch EN/ES para cambiar a español.
 
 Incluye:
 
+- Idioma principal en inglés con opción para español.
 - Contador hasta el **20 de noviembre de 2026**.
 - El 20 de noviembre muestra confetti y lluvia de globos.
 - Galería animada con fotos de Noemi.
