@@ -1912,3 +1912,374 @@ h1 {
 .fullscreen-board .draggable-note.is-dragging {
   z-index: 45 !important;
 }
+
+/* Awwwards-style cinematic layer for the main birthday home */
+.birthday-page {
+  --mx: 0;
+  --my: 0;
+  --cursor-x: 50vw;
+  --cursor-y: 35vh;
+  --scroll: 0;
+  --scroll-px: 0px;
+  background:
+    radial-gradient(circle at var(--cursor-x) var(--cursor-y), rgba(251, 244, 232, 0.13), transparent 18rem),
+    radial-gradient(circle at 50% -12%, rgba(217, 185, 143, 0.22), transparent 34rem),
+    radial-gradient(circle at 12% 25%, rgba(185, 121, 104, 0.18), transparent 30rem),
+    linear-gradient(135deg, #17110f 0%, #241918 48%, #0f1117 100%);
+}
+
+.scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 40;
+  width: calc(var(--scroll) * 100%);
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--champagne), #fff4d8);
+  box-shadow: 0 0 24px rgba(217, 185, 143, 0.55);
+  pointer-events: none;
+}
+
+.experience-layer {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.experience-layer::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  opacity: 0.12;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.42'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+}
+
+.ambient-ring,
+.ambient-line,
+.floating-word {
+  position: absolute;
+  display: block;
+  will-change: transform;
+}
+
+.ambient-ring {
+  border: 1px solid rgba(217, 185, 143, 0.18);
+  border-radius: 999px;
+  box-shadow: inset 0 0 80px rgba(251, 244, 232, 0.035), 0 0 80px rgba(217, 185, 143, 0.04);
+}
+
+.ambient-ring-one {
+  top: 8vh;
+  right: 4vw;
+  width: min(44vw, 560px);
+  aspect-ratio: 1;
+  transform: translate3d(calc(var(--mx) * 34px), calc((var(--my) * 28px) + (var(--scroll) * -72px)), 0) rotate(calc(var(--scroll) * 42deg));
+  animation: ring-breathe 10s ease-in-out infinite alternate;
+}
+
+.ambient-ring-two {
+  bottom: -16vh;
+  left: -8vw;
+  width: min(58vw, 720px);
+  aspect-ratio: 1;
+  opacity: 0.72;
+  transform: translate3d(calc(var(--mx) * -46px), calc((var(--my) * -30px) + (var(--scroll) * 86px)), 0) rotate(calc(var(--scroll) * -28deg));
+  animation: ring-breathe 12s -3s ease-in-out infinite alternate;
+}
+
+.ambient-line {
+  width: 1px;
+  height: 44vh;
+  background: linear-gradient(transparent, rgba(217, 185, 143, 0.23), transparent);
+  transform-origin: 50% 50%;
+}
+
+.ambient-line-one {
+  top: 12vh;
+  left: 55vw;
+  transform: translateY(calc(var(--scroll) * -90px)) rotate(24deg);
+}
+
+.ambient-line-two {
+  right: 20vw;
+  bottom: 0;
+  height: 38vh;
+  opacity: 0.65;
+  transform: translateY(calc(var(--scroll) * 120px)) rotate(-32deg);
+}
+
+.floating-word {
+  padding: 9px 13px;
+  border: 1px solid rgba(251, 244, 232, 0.12);
+  border-radius: 999px;
+  background: rgba(251, 244, 232, 0.035);
+  color: rgba(251, 244, 232, 0.28);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  backdrop-filter: blur(14px);
+}
+
+.floating-word-one {
+  top: 23vh;
+  left: 6vw;
+  transform: translate3d(calc(var(--mx) * -28px), calc(var(--scroll) * -68px), 0) rotate(-8deg);
+}
+
+.floating-word-two {
+  top: 63vh;
+  right: 8vw;
+  transform: translate3d(calc(var(--mx) * 38px), calc(var(--scroll) * -120px), 0) rotate(7deg);
+}
+
+.floating-word-three {
+  bottom: 14vh;
+  left: 24vw;
+  transform: translate3d(calc(var(--mx) * -20px), calc(var(--scroll) * 64px), 0) rotate(4deg);
+}
+
+.hero,
+.countdown-section,
+.gallery,
+.destinations {
+  position: relative;
+  z-index: 1;
+}
+
+.hero::before {
+  position: absolute;
+  inset: 6% 48% auto -8%;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(217, 185, 143, 0.32), transparent);
+  transform: translateX(calc(var(--mx) * 24px));
+}
+
+.intro {
+  transform: translate3d(calc(var(--mx) * -10px), calc(var(--my) * -8px), 0);
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: center;
+}
+
+.scroll-cue {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  color: rgba(251, 244, 232, 0.42);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.scroll-cue span {
+  display: inline-block;
+  width: 42px;
+  height: 1px;
+  overflow: hidden;
+  background: rgba(251, 244, 232, 0.18);
+}
+
+.scroll-cue span::after {
+  display: block;
+  width: 16px;
+  height: 1px;
+  background: var(--champagne);
+  content: "";
+  animation: line-scan 1.8s ease-in-out infinite;
+}
+
+.portrait-stage {
+  transform: translate3d(calc(var(--mx) * 18px), calc(var(--my) * 16px), 0);
+  will-change: transform;
+}
+
+.portrait-orbit {
+  position: absolute;
+  inset: -11% -16% 8%;
+  pointer-events: none;
+  transform: rotate(calc(var(--scroll) * 38deg));
+}
+
+.portrait-orbit span {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(217, 185, 143, 0.18);
+  border-radius: 999px;
+}
+
+.portrait-orbit span:nth-child(1) {
+  transform: rotate(-12deg) scaleX(0.86);
+}
+
+.portrait-orbit span:nth-child(2) {
+  transform: rotate(18deg) scaleX(0.72) scaleY(1.04);
+  opacity: 0.55;
+}
+
+.portrait-card-main {
+  transform: translateY(calc(var(--scroll) * -44px)) rotate(calc(var(--mx) * 1.8deg));
+  transition: transform 280ms ease;
+}
+
+.portrait-card img,
+.gallery img,
+.mini-polaroid img {
+  transform: scale(1.035);
+}
+
+.mini-polaroid {
+  position: absolute;
+  z-index: 2;
+  overflow: hidden;
+  padding: 6px;
+  border: 1px solid rgba(251, 244, 232, 0.2);
+  border-radius: 22px;
+  background: rgba(251, 244, 232, 0.12);
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(16px);
+  will-change: transform;
+}
+
+.mini-polaroid img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  border-radius: 17px;
+  filter: saturate(0.88) contrast(1.03) brightness(0.95);
+}
+
+.mini-polaroid-one {
+  right: -9%;
+  bottom: 18%;
+  width: 35%;
+  transform: translate3d(calc(var(--mx) * -30px), calc((var(--my) * 22px) + (var(--scroll) * -34px)), 0) rotate(9deg);
+}
+
+.mini-polaroid-two {
+  left: -10%;
+  top: 18%;
+  width: 30%;
+  transform: translate3d(calc(var(--mx) * 26px), calc((var(--my) * -18px) + (var(--scroll) * 28px)), 0) rotate(-10deg);
+}
+
+.gallery {
+  perspective: 1200px;
+}
+
+.gallery-image {
+  will-change: transform;
+}
+
+.gallery-image-1 {
+  transform: translateY(calc(var(--scroll) * -40px)) rotate(-1.5deg);
+}
+
+.gallery-image-2 {
+  transform: translateY(calc(var(--scroll) * 28px)) rotate(1.2deg);
+}
+
+.gallery-image-3 {
+  transform: translateY(calc(var(--scroll) * -24px)) rotate(0.8deg);
+}
+
+.gallery-image:hover {
+  transform: translateY(-10px) scale(1.025) rotate(0deg);
+}
+
+.destination-card {
+  backdrop-filter: blur(18px);
+}
+
+.destination-card::before {
+  position: absolute;
+  inset: 1px;
+  border-radius: 27px;
+  background: radial-gradient(circle at calc((var(--mx) + 0.5) * 100%) calc((var(--my) + 0.5) * 100%), rgba(251, 244, 232, 0.11), transparent 42%);
+  content: "";
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.destination-card:not(:disabled):hover::before,
+.destination-card:not(:disabled):focus-visible::before {
+  opacity: 1;
+}
+
+@media (min-width: 1040px) {
+  .countdown-section {
+    transform: translateY(calc(var(--scroll) * -30px));
+  }
+
+  .destinations {
+    transform: translateY(calc(var(--scroll) * -18px));
+  }
+}
+
+@media (max-width: 620px) {
+  .experience-layer {
+    opacity: 0.78;
+  }
+
+  .mini-polaroid-one {
+    right: -2%;
+    bottom: 20%;
+  }
+
+  .mini-polaroid-two {
+    left: -2%;
+    top: 16%;
+  }
+
+  .scroll-cue {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .birthday-page {
+    background:
+      radial-gradient(circle at 50% -12%, rgba(217, 185, 143, 0.22), transparent 34rem),
+      radial-gradient(circle at 12% 25%, rgba(185, 121, 104, 0.18), transparent 30rem),
+      linear-gradient(135deg, #17110f 0%, #241918 48%, #0f1117 100%);
+  }
+
+  .scroll-progress,
+  .experience-layer,
+  .portrait-orbit,
+  .mini-polaroid {
+    display: none;
+  }
+
+  .intro,
+  .portrait-stage,
+  .portrait-card-main,
+  .countdown-section,
+  .destinations,
+  .gallery-image-1,
+  .gallery-image-2,
+  .gallery-image-3 {
+    transform: none !important;
+  }
+}
+
+@keyframes ring-breathe {
+  from { opacity: 0.42; }
+  to { opacity: 0.78; }
+}
+
+@keyframes line-scan {
+  0% { transform: translateX(-18px); opacity: 0; }
+  20%, 70% { opacity: 1; }
+  100% { transform: translateX(44px); opacity: 0; }
+}

@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "start": "node server/index.mjs",
     "predev": "node scripts/free-dev-ports.mjs",
-    "stop:dev": "node scripts/free-dev-ports.mjs"
+    "stop:dev": "node scripts/free-dev-ports.mjs",
+    "images:birthday": "node scripts/prepare-birthday-images.mjs"
   },
   "dependencies": {
     "heic2any": "^0.0.4",

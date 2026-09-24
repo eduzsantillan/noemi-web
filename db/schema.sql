@@ -1,8 +1,31 @@
 CREATE TABLE IF NOT EXISTS birthday_destination_choice (
   singleton_key BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton_key = TRUE),
-  destination TEXT NOT NULL CHECK (destination IN ('Cancun', 'Playa del Carmen', 'Punta cana', 'Puerto Rico', 'Madrid', 'Panama')),
+  destination TEXT NOT NULL CHECK (destination IN ('Cancun', 'Playa del Carmen', 'Punta cana', 'Puerto Rico', 'Madrid', 'Panama', 'Montego Bay', 'Curacao')),
+  destinations TEXT[],
   chosen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE birthday_destination_choice
+  ADD COLUMN IF NOT EXISTS destinations TEXT[];
+
+ALTER TABLE birthday_destination_choice
+  DROP CONSTRAINT IF EXISTS birthday_destination_choice_destination_check,
+  ADD CONSTRAINT birthday_destination_choice_destination_check
+    CHECK (destination IN ('Cancun', 'Playa del Carmen', 'Punta cana', 'Puerto Rico', 'Madrid', 'Panama', 'Montego Bay', 'Curacao'));
+
+UPDATE birthday_destination_choice
+SET destinations = ARRAY[destination]
+WHERE destinations IS NULL OR cardinality(destinations) = 0;
+
+CREATE TABLE IF NOT EXISTS birthday_destination_gate (
+  singleton_key BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton_key = TRUE),
+  passphrase TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO birthday_destination_gate (singleton_key, passphrase)
+VALUES (TRUE, 'eduardomirey')
+ON CONFLICT (singleton_key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS birthday_mural_messages (
   id BIGSERIAL PRIMARY KEY,

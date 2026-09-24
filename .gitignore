@@ -41,3 +41,9 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# Raw birthday photo sources stay local; the site uses optimized WebP files in public/birthday/editorial/
+/public/birthday/IMG_*.jpg
+/public/birthday/IMG_*.JPG
+/public/birthday/IMG_*.jpeg
+/public/birthday/IMG_*.JPEG

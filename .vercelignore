@@ -1,0 +1,8 @@
+# Never upload local secrets or raw source photos in ad-hoc Vercel CLI deploys.
+.env*
+outputs/
+work/
+public/birthday/IMG_*.jpg
+public/birthday/IMG_*.JPG
+public/birthday/IMG_*.jpeg
+public/birthday/IMG_*.JPEG
