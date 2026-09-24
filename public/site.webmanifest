@@ -1,0 +1,13 @@
+{
+  "name": "Noemi Birthday Getaway",
+  "short_name": "Noemi",
+  "description": "A birthday edition for Noemi.",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#f6f3eb",
+  "theme_color": "#f6f3eb",
+  "icons": [
+    { "src": "/noemi-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/noemi-icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
