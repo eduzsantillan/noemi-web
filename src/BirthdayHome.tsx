@@ -58,6 +58,10 @@ function Arrow({ diagonal = false }: { diagonal?: boolean }) {
   return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d={diagonal ? "M5 19 19 5M5 5h14v14" : "M4 12h15m-6-6 6 6-6 6"} stroke="currentColor" strokeWidth="1.4" /></svg>;
 }
 
+function SparkIcon({ className = "" }: { className?: string }) {
+  return <svg className={`ed-spark ${className}`} aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M12 1.5v21M1.5 12h21M4.6 4.6l14.8 14.8M19.4 4.6 4.6 19.4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>;
+}
+
 function Photo({ index, language, className = "", priority = false, sizes = "(max-width: 700px) 90vw, 40vw" }: { index: number; language: Language; className?: string; priority?: boolean; sizes?: string }) {
   const photo = memories[index];
   return <img className={className} src={`/birthday/editorial/${photo.id}-1280.webp`} srcSet={`/birthday/editorial/${photo.id}-640.webp 640w, /birthday/editorial/${photo.id}-1280.webp 1280w`} sizes={sizes} alt={language === "en" ? photo.altEn : photo.altEs} loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : "auto"} decoding="async" />;
@@ -186,7 +190,7 @@ export default function BirthdayHome({ language, onLanguageChange, onNavigate, t
     <a className="ed-skip" href="#getaway">{h.skip}</a>
     <div className="ed-progress" aria-hidden="true" />
     <header className="ed-header">
-      <a className="ed-wordmark" href="#beginning" aria-label="Noemi">noemi<span>✳</span></a>
+      <a className="ed-wordmark" href="#beginning" aria-label="Noemi">noemi<SparkIcon /></a>
       <nav aria-label={language === "en" ? "Main navigation" : "Navegación principal"}>
         <a href="#memories" onClick={(e) => { e.preventDefault(); moveTo("memories"); }}>{h.memories}</a>
         <a href="#getaway" onClick={(e) => { e.preventDefault(); moveTo("getaway"); }}>{h.getaway}</a>
@@ -201,7 +205,7 @@ export default function BirthdayHome({ language, onLanguageChange, onNavigate, t
       <div className="ed-issue"><span>{h.edition}</span><span>20.11 <i /> {h.date}</span></div>
       <div className="ed-hero-layout">
         <div className="ed-hero-copy">
-          <p className="ed-eyebrow"><span className="ed-star" aria-hidden="true">✳</span>{h.eyebrow}</p>
+          <p className="ed-eyebrow"><SparkIcon className="ed-star" />{h.eyebrow}</p>
           <h1 id="ed-title">{h.title}</h1>
           <p className="ed-intro">{h.intro}</p>
           <button className="ed-pill" onClick={() => moveTo("getaway")}>{h.discover}<span><Arrow diagonal /></span></button>
@@ -223,7 +227,7 @@ export default function BirthdayHome({ language, onLanguageChange, onNavigate, t
 
     <section className="ed-countdown" aria-label={t.countdownLabel} data-reveal>
       <div><span className="ed-label">{countdown.isBirthday ? t.birthdayKicker : h.until}</span><h2>{countdown.isBirthday ? t.birthdayTitle : h.countdown}</h2></div>
-      {countdown.isBirthday ? <span className="ed-birthday-wish">{t.birthdayText} ✳</span> : <div className="ed-clock">{(["days", "hours", "minutes", "seconds"] as const).map((unit) => <div key={unit}><strong>{String(countdown[unit]).padStart(2, "0")}</strong><span>{t.time[unit]}</span></div>)}</div>}
+      {countdown.isBirthday ? <span className="ed-birthday-wish">{t.birthdayText} <SparkIcon /></span> : <div className="ed-clock">{(["days", "hours", "minutes", "seconds"] as const).map((unit) => <div key={unit}><strong>{String(countdown[unit]).padStart(2, "0")}</strong><span>{t.time[unit]}</span></div>)}</div>}
     </section>
 
     <section className="ed-memories" id="memories" aria-labelledby="memories-title">
@@ -234,7 +238,7 @@ export default function BirthdayHome({ language, onLanguageChange, onNavigate, t
           <button onClick={() => setAlbumIndex(index)} aria-label={`${h.openPhoto}: ${memories[index][language]}`}><Photo index={index} language={language} sizes="(max-width: 700px) 44vw, 30vw" /><span className="ed-image-open"><Arrow diagonal /></span></button>
           <figcaption><span>{String(position + 1).padStart(2, "0")}</span>{memories[index][language]}</figcaption>
         </figure>)}
-        <div className="ed-gallery-note" data-reveal><span aria-hidden="true">✳</span><p>{language === "en" ? <>Not just places.<br /><em>Pieces of you.</em></> : <>No solo lugares.<br /><em>Pedacitos de ti.</em></>}</p></div>
+        <div className="ed-gallery-note" data-reveal><SparkIcon /><p>{language === "en" ? <>Not just places.<br /><em>Pieces of you.</em></> : <>No solo lugares.<br /><em>Pedacitos de ti.</em></>}</p></div>
       </div>
       <div className="ed-album-footer" data-reveal><span>{String(memories.length).padStart(2, "0")} {h.photoCount} / {h.full}</span><button className="ed-pill ed-pill-light" onClick={() => setAlbumIndex(0)}>{h.album}<span><Arrow diagonal /></span></button></div>
     </section>
@@ -269,7 +273,7 @@ export default function BirthdayHome({ language, onLanguageChange, onNavigate, t
     </section>
 
     <section className="ed-mural-invitation" data-reveal><span aria-hidden="true" className="ed-envelope">♡</span><div><span className="ed-label">03 / {language === "en" ? "The love notes" : "Las notas de amor"}</span><h2>{h.mural}</h2><p>{h.muralText}</p></div><button className="ed-round-link" onClick={requestMural} aria-label={h.muralCta}><Arrow diagonal /></button></section>
-    <footer className="ed-footer"><div><p>{h.footer}</p><button className="ed-text-link" onClick={() => moveTo("beginning")}>{h.top}<span aria-hidden="true">↑</span></button></div><span className="ed-footer-name" aria-hidden="true">Noemi<span>✳</span></span><div className="ed-footer-bottom"><span>{h.madeFor}</span><span>20 NOVEMBER 2026</span><span>THE BEST IS YET TO COME.</span></div></footer>
+    <footer className="ed-footer"><div><p>{h.footer}</p><button className="ed-text-link" onClick={() => moveTo("beginning")}>{h.top}<span aria-hidden="true">↑</span></button></div><span className="ed-footer-name" aria-hidden="true">Noemi<SparkIcon /></span><div className="ed-footer-bottom"><span>{h.madeFor}</span><span>20 NOVEMBER 2026</span><span>THE BEST IS YET TO COME.</span></div></footer>
 
     {albumIndex !== null && <Overlay className="ed-album" label={h.full} onClose={() => setAlbumIndex(null)}>
       <div className="ed-album-header"><span>{h.full}</span><span>{String(albumIndex + 1).padStart(2, "0")} / {memories.length}</span><button data-initial-focus onClick={() => setAlbumIndex(null)} aria-label={h.close}>×</button></div>
@@ -284,12 +288,12 @@ export default function BirthdayHome({ language, onLanguageChange, onNavigate, t
 
     {isConfirmationOpen && <Overlay className="ed-confirmation" label={t.modalKicker} onClose={closeConfirmation} busy={saving}>
       <button className="ed-dialog-close" onClick={closeConfirmation} disabled={saving} aria-label={h.close}>×</button>
-      <span className="ed-label">{t.modalKicker}</span><span className="ed-confirm-star" aria-hidden="true">✳</span><h2>{h.finalists}</h2><p>{selectedDestinations.map((destination) => destination.name).join(" · ")}</p><p>{t.modalText}</p>
+      <span className="ed-label">{t.modalKicker}</span><SparkIcon className="ed-confirm-star" /><h2>{h.finalists}</h2><p>{selectedDestinations.map((destination) => destination.name).join(" · ")}</p><p>{t.modalText}</p>
       <form onSubmit={(event) => { event.preventDefault(); void confirmDestination(); }}><label htmlFor="destination-key">{t.secretLabel}</label><input data-initial-focus id="destination-key" type="password" autoComplete="off" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} placeholder={t.secretPlaceholder} disabled={saving} aria-describedby={saveError ? "choice-save-error" : undefined} />{saveError && <p className="ed-form-error" id="choice-save-error" role="alert">{h.saveError}</p>}<button className="ed-pill" disabled={saving || !passphrase.trim()}>{saving ? h.saving : t.saveDestination}<span><Arrow diagonal /></span></button></form>
     </Overlay>}
     {isMuralLockedOpen && <Overlay className="ed-confirmation ed-locked-mural" label={h.notReadyTitle} onClose={() => setIsMuralLockedOpen(false)}>
       <button className="ed-dialog-close" data-initial-focus onClick={() => setIsMuralLockedOpen(false)} aria-label={h.close}>×</button>
-      <span className="ed-label">20 NOVEMBER ONLY</span><span className="ed-confirm-star" aria-hidden="true">✳</span><h2>{h.notReadyTitle}</h2><p>{h.notReadyText}</p><button className="ed-pill" onClick={() => setIsMuralLockedOpen(false)}>{h.notReadyCta}<span><Arrow diagonal /></span></button>
+      <span className="ed-label">20 NOVEMBER ONLY</span><SparkIcon className="ed-confirm-star" /><h2>{h.notReadyTitle}</h2><p>{h.notReadyText}</p><button className="ed-pill" onClick={() => setIsMuralLockedOpen(false)}>{h.notReadyCta}<span><Arrow diagonal /></span></button>
     </Overlay>}
 
     {countdown.isBirthday && <div className="ed-celebration" aria-hidden="true">{Array.from({ length: 24 }, (_, index) => <i key={index} style={{ "--i": index } as CSSProperties} />)}{Array.from({ length: 9 }, (_, index) => <span className="ed-birthday-balloon" key={index} style={{ "--i": index } as CSSProperties} />)}</div>}
