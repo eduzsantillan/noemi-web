@@ -1,4 +1,5 @@
 import { ensureSchema, handleApi } from '../server/api.mjs';
+import { isMuralProtectedPath, muralAccessState } from '../server/mural-access.mjs';
 
 let schemaReady;
 
@@ -12,7 +13,10 @@ function ensureSchemaOnce() {
 
 export async function invokeApi(request, response, pathname) {
   try {
-    await ensureSchemaOnce();
+    // Authentication and unauthenticated denials do not require a database connection.
+    if (pathname !== '/api/mural-access' && !(isMuralProtectedPath(pathname) && !muralAccessState(request).authorized)) {
+      await ensureSchemaOnce();
+    }
     const protocol = request.headers['x-forwarded-proto'] ?? 'https';
     const host = request.headers.host ?? 'localhost';
     const url = new URL(request.url ?? pathname, `${protocol}://${host}`);

@@ -1,9 +1,15 @@
-import type { ChangeEvent, CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent, FormEvent, PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import BirthdayHome from "./BirthdayHome";
+import MuralAccessGate from "./MuralAccessGate";
+import MuralNoteDesign from "./MuralNoteDesign";
+import { NOTE_COLORS, NOTE_DESIGNS, normalizeNoteAppearance } from "../shared/mural-appearance.mjs";
+import type { NoteColor, NoteDesign } from "../shared/mural-appearance.mjs";
+import { boundPosition, calculateMuralLayout, clamp, overlaps, MURAL_CANVAS_WIDTH, MURAL_CARD_WIDTH, MURAL_CANVAS_MIN_HEIGHT } from "./mural-layout";
+import type { MuralPosition } from "./mural-layout";
+import "./mural.css";
 
 const storageKey = "noemi-birthday-language";
-const BIRTHDAY_TARGET = new Date("2026-11-20T00:00:00-05:00");
 
 export type Language = "en" | "es";
 type Route = "home" | "mural";
@@ -29,6 +35,17 @@ type MuralMessage = {
   x: number;
   y: number;
   imageDataUrl: string | null;
+  color: NoteColor;
+  design: NoteDesign;
+};
+
+const noteColorNames = {
+  en: { cream: "Cream", butter: "Butter", rose: "Rose", lilac: "Lilac", sky: "Sky", mint: "Mint" },
+  es: { cream: "Crema", butter: "Amarillo", rose: "Rosa", lilac: "Lila", sky: "Cielo", mint: "Menta" },
+};
+const noteDesignNames = {
+  en: { plain: "Plain", confetti: "Confetti", balloons: "Balloons", cake: "Cake" },
+  es: { plain: "Lisa", confetti: "Confeti", balloons: "Globos", cake: "Pastel" },
 };
 
 type MuralCopy = {
@@ -289,396 +306,337 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  if (route === "mural" && Date.now() >= BIRTHDAY_TARGET.getTime()) {
-    return <MuralPage language={language} onLanguageChange={setLanguage} onNavigate={navigate} t={t} />;
+  if (route === "mural") {
+    return <MuralAccessGate language={language} onLanguageChange={setLanguage} onBack={() => navigate("/")}><MuralPage language={language} onLanguageChange={setLanguage} onNavigate={navigate} t={t} /></MuralAccessGate>;
   }
 
   return <BirthdayHome language={language} onLanguageChange={setLanguage} onNavigate={navigate} t={t} />;
 }
 
-const MAX_NOTE_OVERLAP = 0.1;
 const MAX_IMAGE_DATA_URL_LENGTH = 3_500_000;
 const NOTE_IMAGE_TARGET_LENGTH = 1_250_000;
 const NOTE_IMAGE_ASPECT_RATIO = 4 / 3;
-const NOTE_ESTIMATE = { width: 320, height: 320 };
-const PHOTO_NOTE_ESTIMATE_HEIGHT = 430;
 
-type DragState = {
-  id: number;
-  pointerId: number;
-  element: HTMLElement;
-  startPointerX: number;
-  startPointerY: number;
-  startX: number;
-  startY: number;
-  startLeftPx: number;
-  startTopPx: number;
-  lastX: number;
-  lastY: number;
-  lastValidX: number;
-  lastValidY: number;
-  width: number;
-  height: number;
-};
-
-type Rect = {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-};
-
-function MuralPage({
-  language,
-  onLanguageChange,
-  onNavigate,
-  t,
-}: {
-  language: Language;
-  onLanguageChange: (language: Language) => void;
-  onNavigate: (path: "/" | "/mural") => void;
-  t: PageCopy;
+function MuralPage({ language, onLanguageChange, onNavigate, t }: {
+  language: Language; onLanguageChange: (language: Language) => void;
+  onNavigate: (path: "/" | "/mural") => void; t: PageCopy;
 }) {
+  const es = language === "es";
+  const muralCopy = t.mural;
   const [messages, setMessages] = useState<MuralMessage[]>([]);
   const [author, setAuthor] = useState("");
   const [note, setNote] = useState("");
+  const [noteColor, setNoteColor] = useState<NoteColor>("cream");
+  const [noteDesign, setNoteDesign] = useState<NoteDesign>("confetti");
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [imageProcessing, setImageProcessing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<number | null>(null);
-  const boardRef = useRef<HTMLDivElement | null>(null);
-  const dragStateRef = useRef<DragState | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const muralCopy = t.mural;
+  const [layout, setLayout] = useState<{ positions: Record<number, MuralPosition>; height: number }>({ positions: {}, height: MURAL_CANVAS_MIN_HEIGHT });
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const boardRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const composeButtonRef = useRef<HTMLButtonElement>(null);
+  const focusedNoteRef = useRef<number | null>(null);
+  const centeredRef = useRef(false);
+  const dragFrameRef = useRef(0);
+  const panRef = useRef<{ pointerId: number; x: number; y: number; left: number; top: number } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const versionsRef = useRef(new Map<number, number>());
+  const positionQueueRef = useRef(new Map<number, Promise<void>>());
+  const confirmedPositionsRef = useRef(new Map<number, MuralPosition>());
+  const imageRequestRef = useRef(0);
+  const dragStateRef = useRef<{
+    id: number; pointerId: number; element: HTMLElement; handle: HTMLElement;
+    clientX: number; clientY: number; left: number; top: number;
+    previous: MuralPosition; current: MuralPosition; moved: boolean;
+    scrollLeft: number; scrollTop: number; pointerX: number; pointerY: number;
+  } | null>(null);
+  const keyboardPreviousRef = useRef<{ id: number; position: MuralPosition } | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    const abort = new AbortController();
+    setLoading(true); setLoadError(false);
+    fetch("/api/messages", { signal: abort.signal }).then(async response => {
+      if (!response.ok) throw new Error("Messages unavailable");
+      const data = await response.json() as { messages: MuralMessage[] };
+      if (!abort.signal.aborted) setMessages(data.messages.map(normalizeMuralMessage));
+    }).catch(() => { if (!abort.signal.aborted) setLoadError(true); })
+      .finally(() => { if (!abort.signal.aborted) setLoading(false); });
+    return () => abort.abort();
+  }, [loadAttempt]);
 
-    async function loadMessages() {
-      try {
-        const response = await fetch("/api/messages");
-        if (!response.ok) throw new Error("Could not load messages.");
-        const data = (await response.json()) as { messages: MuralMessage[] };
-        const arranged = arrangeMessages(data.messages.map(normalizeMuralMessage), boardRef.current);
-        if (!cancelled) {
-          setMessages(arranged.messages);
-          arranged.changed.forEach((item) => void persistPosition(item.id, item.x, item.y));
-        }
-      } catch {
-        if (!cancelled) setFeedback(muralCopy.loadError);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    loadMessages();
-
-    return () => {
-      cancelled = true;
+  useLayoutEffect(() => {
+    const board = boardRef.current;
+    if (!board) return;
+    const measure = () => {
+      if (dragStateRef.current) return;
+      const shells = Array.from(board.querySelectorAll<HTMLElement>(".mural-note-shell"));
+      const cardWidth = shells[0]?.offsetWidth || MURAL_CARD_WIDTH;
+      const next = calculateMuralLayout([...messagesRef.current].sort((a, b) => a.id - b.id).map(message => ({
+        ...message, height: board.querySelector<HTMLElement>(`[data-note-id="${message.id}"]`)?.offsetHeight || 300,
+      })), MURAL_CANVAS_WIDTH, cardWidth, MURAL_CANVAS_MIN_HEIGHT);
+      setLayout(current => JSON.stringify(current) === JSON.stringify(next) ? current : next);
     };
-  }, [muralCopy.loadError]);
+    const observer = new ResizeObserver(measure);
+    observer.observe(board);
+    board.querySelectorAll<HTMLElement>(".mural-note-body").forEach(element => observer.observe(element));
+    measure();
+    return () => observer.disconnect();
+    // Text/images are measured by ResizeObserver; drag commits must not reflow other notes.
+  }, [messages.length]);
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || !messages.length || (centeredRef.current && focusedNoteRef.current === null)) return;
+    const id = focusedNoteRef.current ?? Math.min(...messages.map(message => message.id));
+    const position = layout.positions[id];
+    if (!position) return;
+    const element = boardRef.current?.querySelector<HTMLElement>(`[data-note-id="${id}"]`);
+    viewport.scrollLeft = Math.max(0, position.x / 100 * MURAL_CANVAS_WIDTH - 28);
+    viewport.scrollTop = Math.max(0, position.y / 100 * layout.height - Math.max(28, (viewport.clientHeight - (element?.offsetHeight || 300)) / 2));
+    centeredRef.current = true; focusedNoteRef.current = null;
+  }, [layout, messages.length]);
+
+  useEffect(() => {
+    if (!isComposerOpen) return;
+    const dialog = dialogRef.current;
+    const returnFocus = composeButtonRef.current;
+    dialog?.showModal();
+    dialog?.querySelector<HTMLInputElement>("#mural-author")?.focus({ preventScroll: true });
+    return () => { dialog?.close(); returnFocus?.focus({ preventScroll: true }); };
+  }, [isComposerOpen]);
+
+  useEffect(() => () => cancelAnimationFrame(dragFrameRef.current), []);
 
   async function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-
+    const request = ++imageRequestRef.current;
+    setImageProcessing(true); setFeedback("");
     try {
-      if (!isSupportedPhotoFile(file)) throw new Error("Not an image.");
+      if (!isSupportedPhotoFile(file)) throw new Error("Not an image");
       const dataUrl = await prepareImageForNote(file);
-      if (dataUrl.length > MAX_IMAGE_DATA_URL_LENGTH) throw new Error("Image too large.");
-      setImageDataUrl(dataUrl);
-      setFeedback("");
+      if (dataUrl.length > MAX_IMAGE_DATA_URL_LENGTH) throw new Error("Image too large");
+      if (request === imageRequestRef.current) setImageDataUrl(dataUrl);
     } catch {
-      setImageDataUrl(null);
-      setFeedback(muralCopy.photoError);
+      if (request === imageRequestRef.current) { setImageDataUrl(null); setFeedback(muralCopy.photoError); }
     } finally {
-      event.target.value = "";
+      if (request === imageRequestRef.current) setImageProcessing(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
   async function submitNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const trimmedAuthor = author.trim();
-    const trimmedNote = note.trim();
-    if (!trimmedAuthor || !trimmedNote) return;
-
-    const position = findOpenPosition(messages, boardRef.current, Boolean(imageDataUrl));
-
-    setSaving(true);
-    setFeedback("");
-
+    const trimmedAuthor = author.trim(), trimmedNote = note.trim();
+    if (saving || loading || imageProcessing || !trimmedAuthor || !trimmedNote) return;
+    setSaving(true); setFeedback("");
     try {
-      const response = await fetch("/api/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          author: trimmedAuthor,
-          message: trimmedNote,
-          x: position.x,
-          y: position.y,
-          imageDataUrl,
-        }),
-      });
-
-      const data = (await response.json()) as { message?: MuralMessage; error?: string };
-      if (!response.ok || !data.message) {
-        setFeedback(muralCopy.saveError);
-        return;
-      }
-
-      setMessages((current) => [normalizeMuralMessage(data.message as MuralMessage), ...current]);
-      setAuthor("");
-      setNote("");
-      setImageDataUrl(null);
-      setFeedback(muralCopy.saved);
-    } catch {
-      setFeedback(muralCopy.saveError);
-    } finally {
-      setSaving(false);
-    }
+      const response = await fetch("/api/messages", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ author: trimmedAuthor, message: trimmedNote, x: 8, y: 8, imageDataUrl, color: noteColor, design: noteDesign }) });
+      const data = await response.json() as { message?: MuralMessage };
+      if (!response.ok || !data.message) throw new Error("Could not publish");
+      setMessages(current => [normalizeMuralMessage(data.message!), ...current]);
+      focusedNoteRef.current = data.message.id;
+      setAuthor(""); setNote(""); setImageDataUrl(null); setFeedback(muralCopy.saved); setIsComposerOpen(false);
+      setNoteColor("cream"); setNoteDesign("confetti");
+    } catch { setFeedback(muralCopy.saveError); }
+    finally { setSaving(false); }
   }
 
-  function startDrag(event: ReactPointerEvent<HTMLElement>, muralMessage: MuralMessage) {
+  function validPosition(id: number, position: MuralPosition, element: HTMLElement) {
     const board = boardRef.current;
-    if (!board || (event.pointerType === "mouse" && event.button !== 0)) return;
-
-    const noteElement = event.currentTarget;
-    const visualX = (noteElement.offsetLeft / board.clientWidth) * 100;
-    const visualY = (noteElement.offsetTop / board.clientHeight) * 100;
-    noteElement.setPointerCapture(event.pointerId);
-    noteElement.style.setProperty("--note-left", `${visualX}%`);
-    noteElement.style.setProperty("--note-top", `${visualY}%`);
-    noteElement.style.setProperty("--drag-x", "0px");
-    noteElement.style.setProperty("--drag-y", "0px");
-    setFeedback("");
-    setDraggingId(muralMessage.id);
-    dragStateRef.current = {
-      id: muralMessage.id,
-      pointerId: event.pointerId,
-      element: noteElement,
-      startPointerX: event.clientX,
-      startPointerY: event.clientY,
-      startX: visualX,
-      startY: visualY,
-      startLeftPx: noteElement.offsetLeft,
-      startTopPx: noteElement.offsetTop,
-      lastX: visualX,
-      lastY: visualY,
-      lastValidX: visualX,
-      lastValidY: visualY,
-      width: noteElement.offsetWidth || NOTE_ESTIMATE.width,
-      height: noteElement.offsetHeight || NOTE_ESTIMATE.height,
-    };
+    if (!board) return false;
+    const rect = { left: position.x / 100 * board.clientWidth, top: position.y / 100 * board.clientHeight, width: element.offsetWidth, height: element.offsetHeight };
+    return !Array.from(board.querySelectorAll<HTMLElement>(".mural-note-shell")).some(other => {
+      if (Number(other.dataset.noteId) === id) return false;
+      return overlaps(rect, { left: other.offsetLeft, top: other.offsetTop, width: other.offsetWidth, height: other.offsetHeight });
+    });
   }
 
+  function startDrag(event: ReactPointerEvent<HTMLElement>, message: MuralMessage) {
+    if (dragStateRef.current || event.isPrimary === false || event.button !== 0) return;
+    const element = event.currentTarget.closest<HTMLElement>(".mural-note-shell");
+    const previous = layoutRef.current.positions[message.id];
+    if (!element || !previous) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragStateRef.current = { id: message.id, pointerId: event.pointerId, element, handle: event.currentTarget,
+      clientX: event.clientX, clientY: event.clientY, left: element.offsetLeft, top: element.offsetTop,
+      previous, current: previous, moved: false,
+      scrollLeft: viewportRef.current?.scrollLeft || 0, scrollTop: viewportRef.current?.scrollTop || 0,
+      pointerX: event.clientX, pointerY: event.clientY };
+    dragFrameRef.current = requestAnimationFrame(autoPan);
+    setDraggingId(message.id); setFeedback("");
+  }
+
+  function updateDraggedNote(clientX: number, clientY: number) {
+    const drag = dragStateRef.current, board = boardRef.current, viewport = viewportRef.current;
+    if (!drag || !board || !viewport) return;
+    drag.pointerX = clientX; drag.pointerY = clientY;
+    const next = boundPosition(drag.left + clientX - drag.clientX + viewport.scrollLeft - drag.scrollLeft,
+      drag.top + clientY - drag.clientY + viewport.scrollTop - drag.scrollTop,
+      drag.element.offsetWidth, drag.element.offsetHeight, board.clientWidth, board.clientHeight);
+    const valid = validPosition(drag.id, next, drag.element);
+    if (valid) drag.current = next;
+    drag.moved = drag.moved || Math.hypot(clientX - drag.clientX, clientY - drag.clientY) > 3;
+    drag.element.style.transform = `translate3d(${next.x / 100 * board.clientWidth - drag.left}px, ${next.y / 100 * board.clientHeight - drag.top}px, 0)`;
+    drag.element.classList.toggle("is-blocked", !valid);
+  }
+  function autoPan() {
+    const drag = dragStateRef.current, viewport = viewportRef.current;
+    if (!drag || !viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const edge = 24;
+    const velocity = (value: number, min: number, max: number) => value < min + edge ? -Math.min(9, (min + edge - value) / 3) : value > max - edge ? Math.min(9, (value - max + edge) / 3) : 0;
+    const x = velocity(drag.pointerX, rect.left, rect.right), y = velocity(drag.pointerY, rect.top, rect.bottom);
+    if (drag.moved && (x || y)) { viewport.scrollBy(x, y); updateDraggedNote(drag.pointerX, drag.pointerY); }
+    dragFrameRef.current = requestAnimationFrame(autoPan);
+  }
   function dragNote(event: ReactPointerEvent<HTMLElement>) {
-    const dragging = dragStateRef.current;
-    if (!dragging || event.pointerId !== dragging.pointerId) return;
-    const board = boardRef.current;
-    if (!board) return;
-
-    const boardRect = board.getBoundingClientRect();
-    const maxLeft = Math.max(0, boardRect.width - dragging.width);
-    const maxTop = Math.max(0, boardRect.height - dragging.height);
-    const nextLeftPx = clamp(dragging.startLeftPx + event.clientX - dragging.startPointerX, 0, maxLeft);
-    const nextTopPx = clamp(dragging.startTopPx + event.clientY - dragging.startPointerY, 0, maxTop);
-    const next = {
-      x: (nextLeftPx / boardRect.width) * 100,
-      y: (nextTopPx / boardRect.height) * 100,
-    };
-
-    dragging.lastX = next.x;
-    dragging.lastY = next.y;
-
-    const isValidSpot =
-      !hasCrowdedOverlap(dragging.id, next.x, next.y, dragging.width, dragging.height, messages, boardRect) &&
-      !isInProtectedMuralZone(next.x, next.y, dragging.width, dragging.height, board);
-
-    if (isValidSpot) {
-      dragging.lastValidX = next.x;
-      dragging.lastValidY = next.y;
-    }
-
-    dragging.element.style.setProperty("--drag-x", `${nextLeftPx - dragging.startLeftPx}px`);
-    dragging.element.style.setProperty("--drag-y", `${nextTopPx - dragging.startTopPx}px`);
+    if (event.pointerId === dragStateRef.current?.pointerId) updateDraggedNote(event.clientX, event.clientY);
   }
 
-  function endDrag(event: ReactPointerEvent<HTMLElement>) {
-    const dragging = dragStateRef.current;
-    if (!dragging || event.pointerId !== dragging.pointerId) return;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-
-    const board = boardRef.current;
-    const boardRect = board?.getBoundingClientRect();
-    const isFinalSpotBlocked = boardRect
-      ? hasCrowdedOverlap(dragging.id, dragging.lastX, dragging.lastY, dragging.width, dragging.height, messages, boardRect) ||
-        isInProtectedMuralZone(dragging.lastX, dragging.lastY, dragging.width, dragging.height, board)
-      : false;
-    const finalPosition = isFinalSpotBlocked
-      ? { x: dragging.lastValidX, y: dragging.lastValidY }
-      : { x: dragging.lastX, y: dragging.lastY };
-    const id = dragging.id;
-
-    dragging.element.style.setProperty("--drag-x", "0px");
-    dragging.element.style.setProperty("--drag-y", "0px");
-    dragging.element.style.setProperty("--note-left", `${finalPosition.x}%`);
-    dragging.element.style.setProperty("--note-top", `${finalPosition.y}%`);
+  function endDrag(event: ReactPointerEvent<HTMLElement>, cancelled = false) {
+    const drag = dragStateRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
     dragStateRef.current = null;
-    setDraggingId(null);
-    setMessages((current) =>
-      current.map((item) => item.id === id ? { ...item, x: finalPosition.x, y: finalPosition.y } : item),
-    );
-    void persistPosition(id, finalPosition.x, finalPosition.y);
-  }
-
-  async function persistPosition(id: number, x: number, y: number) {
-    try {
-      const response = await fetch(`/api/messages/${id}/position`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ x, y }),
-      });
-      if (!response.ok) throw new Error("Could not save position.");
-    } catch (error) {
-      console.warn("Could not save note position", error);
+    cancelAnimationFrame(dragFrameRef.current);
+    if (drag.handle.hasPointerCapture(event.pointerId)) drag.handle.releasePointerCapture(event.pointerId);
+    drag.element.style.removeProperty("transform"); drag.element.classList.remove("is-blocked"); setDraggingId(null);
+    if (!cancelled && drag.moved && (drag.current.x !== drag.previous.x || drag.current.y !== drag.previous.y)) {
+      setLayout(current => ({ ...current, positions: { ...current.positions, [drag.id]: drag.current } }));
+      void persistPosition(drag.id, drag.current, drag.previous);
     }
   }
 
-  return (
-    <main className="birthday-page mural-page mural-fullscreen">
-      <div className="silk silk-one" />
-      <div className="silk silk-two" />
-      <div className="mural-orb mural-orb-one" aria-hidden="true" />
-      <div className="mural-orb mural-orb-two" aria-hidden="true" />
+  async function persistPosition(id: number, position: MuralPosition, previous: MuralPosition) {
+    const version = (versionsRef.current.get(id) || 0) + 1;
+    versionsRef.current.set(id, version);
+    if (!confirmedPositionsRef.current.has(id)) confirmedPositionsRef.current.set(id, previous);
+    // Serialize this note's requests so a slower earlier move cannot overwrite a newer one.
+    const pending = positionQueueRef.current.get(id) || Promise.resolve();
+    const task = pending.then(async () => {
+      try {
+        const response = await fetch(`/api/messages/${id}/position`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(position) });
+        if (!response.ok) throw new Error("Position unavailable");
+        confirmedPositionsRef.current.set(id, position);
+        if (versionsRef.current.get(id) === version) setMessages(current => current.map(item => item.id === id ? { ...item, ...position } : item));
+      } catch {
+        if (versionsRef.current.get(id) === version) {
+          const rollback = confirmedPositionsRef.current.get(id) || previous;
+          setLayout(current => ({ ...current, positions: { ...current.positions, [id]: rollback } }));
+          setMessages(current => current.map(item => item.id === id ? { ...item, ...rollback } : item));
+          setFeedback(es ? "No se guardó el movimiento. La nota volvió a su lugar; puedes reintentarlo." : "The move wasn't saved. The note returned to its place; please try again.");
+        }
+      }
+    });
+    positionQueueRef.current.set(id, task);
+    await task;
+    if (positionQueueRef.current.get(id) === task) positionQueueRef.current.delete(id);
+  }
 
-      <section className="mural-screen" aria-labelledby="notes-title">
-        <div className="topline mural-topline mural-topbar">
-          <button className="ghost-link" onClick={() => onNavigate("/")} type="button">
-            ← {t.nav.home}
-          </button>
-          <LanguageToggle language={language} onChange={onLanguageChange} />
+  function moveWithKeyboard(event: React.KeyboardEvent<HTMLButtonElement>, id: number) {
+    const directions: Record<string, [number, number]> = { ArrowLeft: [-16, 0], ArrowRight: [16, 0], ArrowUp: [0, -16], ArrowDown: [0, 16] };
+    const direction = directions[event.key];
+    if (!direction) return;
+    event.preventDefault();
+    const board = boardRef.current, element = event.currentTarget.closest<HTMLElement>(".mural-note-shell"), current = layoutRef.current.positions[id];
+    if (!board || !element || !current) return;
+    if (!keyboardPreviousRef.current) keyboardPreviousRef.current = { id, position: current };
+    const next = boundPosition(current.x / 100 * board.clientWidth + direction[0], current.y / 100 * board.clientHeight + direction[1], element.offsetWidth, element.offsetHeight, board.clientWidth, board.clientHeight);
+    if (validPosition(id, next, element)) setLayout(value => ({ ...value, positions: { ...value.positions, [id]: next } }));
+  }
+  function finishKeyboardMove() {
+    const previous = keyboardPreviousRef.current;
+    if (!previous) return;
+    keyboardPreviousRef.current = null;
+    const next = layoutRef.current.positions[previous.id];
+    if (next && (next.x !== previous.position.x || next.y !== previous.position.y)) void persistPosition(previous.id, next, previous.position);
+  }
+
+  function panCanvas(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== "mouse" || event.button !== 0 || (event.target as HTMLElement).closest(".mural-note-shell, button")) return;
+    const viewport = event.currentTarget;
+    event.preventDefault(); viewport.setPointerCapture(event.pointerId);
+    panRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: viewport.scrollLeft, top: viewport.scrollTop };
+    viewport.classList.add("is-panning");
+  }
+  function moveCanvas(event: ReactPointerEvent<HTMLDivElement>) {
+    const pan = panRef.current;
+    if (!pan || pan.pointerId !== event.pointerId) return;
+    event.currentTarget.scrollLeft = pan.left - (event.clientX - pan.x);
+    event.currentTarget.scrollTop = pan.top - (event.clientY - pan.y);
+  }
+  function endPan(event: ReactPointerEvent<HTMLDivElement>) {
+    if (panRef.current?.pointerId !== event.pointerId) return;
+    panRef.current = null; event.currentTarget.classList.remove("is-panning");
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+
+  return <main className="birthday-page mural-page notes-page mural-board-page">
+    <header className="mural-nav"><button className="mural-back" onClick={() => onNavigate("/")}>← {t.nav.home}</button><span className="mural-mark">NOEMI / NOTES</span><LanguageToggle language={language} onChange={onLanguageChange} /></header>
+    <section className="mural-board-heading" aria-labelledby="notes-title"><div><h1 id="notes-title">{muralCopy.boardTitle}<span>{messages.length}</span></h1><p id="mural-move-hint">{es ? "Arrastra las notas. Desliza el fondo." : "Drag the notes. Swipe the background."}<span className="visually-hidden">{es ? "También puedes usar las flechas del teclado desde la parte superior de una nota." : "You can also use the arrow keys from the top of a note."}</span></p></div></section>
+    <div className="mural-canvas-wrap">
+      <div className="mural-canvas-viewport" ref={viewportRef} tabIndex={0} role="region" aria-label={es ? "Lienzo de notas desplazable" : "Scrollable note canvas"} onPointerDown={panCanvas} onPointerMove={moveCanvas} onPointerUp={endPan} onPointerCancel={endPan} onLostPointerCapture={endPan}>
+        <div className="mural-notes mural-canvas" aria-busy={loading} ref={boardRef} style={{ width: MURAL_CANVAS_WIDTH, height: layout.height }}>
+          {messages.map((message, index) => <div className={`mural-note-shell ${draggingId === message.id ? "is-dragging" : ""}`} data-note-id={message.id} key={message.id} onPointerMove={dragNote} onPointerUp={event => endDrag(event)} onPointerCancel={event => endDrag(event, true)} onLostPointerCapture={event => endDrag(event, true)} style={{ left: `${layout.positions[message.id]?.x || 0}%`, top: `${layout.positions[message.id]?.y || 0}%`, visibility: layout.positions[message.id] ? "visible" : "hidden" }}>
+            <article className="mural-note-body mural-paper" data-color={message.color} data-design={message.design} onPointerDown={event => startDrag(event, message)} aria-label={`${es ? "Nota de" : "Note from"} ${message.author}`}>
+              <button className="mural-drag-handle" type="button" aria-label={`${es ? "Mover nota de" : "Move note from"} ${message.author}`} aria-describedby="mural-move-hint" onKeyDown={event => moveWithKeyboard(event, message.id)} onKeyUp={finishKeyboardMove} onBlur={finishKeyboardMove}><span>{String(index + 1).padStart(2, "0")} / {es ? "PARA NOEMI" : "FOR NOEMI"}</span><svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="currentColor">{[5, 9, 13].flatMap(y => [6, 12].map(x => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.15" />))}</svg></button>
+              {message.design !== "plain" && <div className="mural-birthday-detail"><span aria-hidden="true">{es ? "UN DESEO PARA TI" : "A WISH FOR YOU"}</span><MuralNoteDesign design={message.design} /></div>}
+              {message.imageDataUrl && <div className="mural-note-photo"><img src={message.imageDataUrl} alt={es ? `Recuerdo compartido por ${message.author}` : `Memory shared by ${message.author}`} loading="lazy" draggable={false} /></div>}
+              <p>{message.message}</p><footer><strong>{message.author}</strong><span>{muralCopy.noteDate(new Date(message.createdAt))}</span></footer>
+            </article>
+          </div>)}
         </div>
-
-        <div className="notes-board fullscreen-board" aria-busy={loading} ref={boardRef}>
-          <div className="board-glow" aria-hidden="true" />
-          <div className="mural-board-intro">
-            <p className="kicker">{muralCopy.boardKicker}</p>
-            <h1 id="notes-title">{muralCopy.boardTitle}</h1>
-            {muralCopy.boardText && <p>{muralCopy.boardText}</p>}
-            {muralCopy.dragHint && <p className="drag-hint">{muralCopy.dragHint}</p>}
+      </div>
+      {loading && <p className="mural-canvas-notice" role="status">{es ? "Preparando el mural…" : "Getting the mural ready…"}</p>}
+      {loadError && <div className="mural-canvas-notice" role="alert"><p>{es ? "No pudimos cargar las notas." : "We couldn't load the notes."}</p><button className="mural-action" onClick={() => setLoadAttempt(value => value + 1)}>{es ? "Reintentar" : "Try again"}</button></div>}
+      {!loading && !loadError && messages.length === 0 && <div className="mural-canvas-notice mural-empty"><span aria-hidden="true">♡</span><h2>{muralCopy.emptyTitle}</h2><p>{muralCopy.emptyText}</p></div>}
+      {!isComposerOpen && feedback && <p className="mural-canvas-feedback" role="status">{feedback}</p>}
+      <button className="mural-create-note" ref={composeButtonRef} onClick={() => { setFeedback(""); setIsComposerOpen(true); }}><span aria-hidden="true">＋</span>{es ? "Dejar una nota" : "Leave a note"}</button>
+    </div>
+    {isComposerOpen && <dialog ref={dialogRef} className="mural-compose-dialog" aria-labelledby="mural-compose-title" onCancel={event => { event.preventDefault(); if (!saving) setIsComposerOpen(false); }} onClick={event => { if (event.target === event.currentTarget && !saving) setIsComposerOpen(false); }}>
+      <button className="mural-compose-close" type="button" aria-label={es ? "Cerrar" : "Close"} disabled={saving} onClick={() => setIsComposerOpen(false)}>×</button>
+        <form className="note-form mural-composer" onSubmit={submitNote} aria-busy={saving || imageProcessing}>
+          <p className="kicker">{muralCopy.formKicker}</p><h3 id="mural-compose-title">{es ? "Un deseo para Noemi." : "A wish for Noemi."}</h3>
+          <label htmlFor="mural-author">{muralCopy.nameLabel}</label><input required autoComplete="name" id="mural-author" maxLength={80} value={author} onChange={event => setAuthor(event.target.value)} placeholder={muralCopy.namePlaceholder} disabled={saving} />
+          <label htmlFor="mural-note">{muralCopy.messageLabel}</label>
+          <div className="mural-draft-preview mural-paper" data-color={noteColor} data-design={noteDesign}>
+            <div className="mural-draft-heading" aria-hidden="true"><span>{es ? "PARA NOEMI, CON AMOR" : "FOR NOEMI, WITH LOVE"}</span>{noteDesign !== "plain" && <MuralNoteDesign design={noteDesign} />}</div>
+            <textarea required id="mural-note" maxLength={500} value={note} onChange={event => setNote(event.target.value)} placeholder={muralCopy.messagePlaceholder} rows={3} disabled={saving} />
           </div>
-
-          <form className="note-form mural-composer" onSubmit={submitNote}>
-            <p className="kicker">{muralCopy.formKicker}</p>
-            <label htmlFor="mural-author">{muralCopy.nameLabel}</label>
-            <input
-              autoComplete="name"
-              id="mural-author"
-              maxLength={80}
-              onChange={(event) => setAuthor(event.target.value)}
-              placeholder={muralCopy.namePlaceholder}
-              value={author}
-            />
-
-            <label htmlFor="mural-note">{muralCopy.messageLabel}</label>
-            <textarea
-              id="mural-note"
-              maxLength={500}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder={muralCopy.messagePlaceholder}
-              rows={4}
-              value={note}
-            />
-
-            <div className="photo-picker compact-photo-picker">
-              <div>
-                <span className="photo-label">{muralCopy.photoLabel}</span>
-              </div>
-              <input
-                accept="image/*,.heic,.heif"
-                className="visually-hidden"
-                onChange={handleImageChange}
-                ref={fileInputRef}
-                tabIndex={-1}
-                type="file"
-              />
-              <button className="ghost-link" onClick={() => fileInputRef.current?.click()} type="button">
-                {muralCopy.photoButton}
-              </button>
-            </div>
-
-            {imageDataUrl && (
-              <div className="photo-preview compact-photo-preview">
-                <img src={imageDataUrl} alt="Selected memory" />
-                <button className="modal-close" onClick={() => setImageDataUrl(null)} type="button" aria-label={muralCopy.removePhoto}>
-                  ×
-                </button>
-              </div>
-            )}
-
-            <div className="form-footer">
-              {note.length > 420 && <span className="character-counter">{muralCopy.characterCount(note.length)}</span>}
-              <button className="confirm-button" disabled={saving || !author.trim() || !note.trim()} type="submit">
-                {saving ? `${muralCopy.saving}…` : muralCopy.submit}
-              </button>
-            </div>
-            {feedback && <p className="status-message mural-feedback" role="status">{feedback}</p>}
-          </form>
-
-          {!loading && messages.length === 0 && (
-            <div className="empty-mural empty-mural-floating">
-              <span>✦</span>
-              <h3>{muralCopy.emptyTitle}</h3>
-              <p>{muralCopy.emptyText}</p>
-            </div>
-          )}
-
-          {loading
-            ? Array.from({ length: 6 }, (_, index) => (
-                <div
-                  className="sticky-note skeleton-note"
-                  key={index}
-                  style={{
-                    "--note-left": `${[7, 34, 58, 16, 46, 70][index]}%`,
-                    "--note-top": `${[42, 38, 40, 68, 64, 70][index]}%`,
-                  } as CSSProperties}
-                />
-              ))
-            : messages.map((muralMessage, index) => (
-                <article
-                  className={`sticky-note draggable-note ${draggingId === muralMessage.id ? "is-dragging" : ""}`}
-                  data-note-id={muralMessage.id}
-                  key={muralMessage.id}
-                  onPointerCancel={endDrag}
-                  onDragStart={(event) => event.preventDefault()}
-                  onPointerDown={(event) => startDrag(event, muralMessage)}
-                  onPointerMove={dragNote}
-                  onPointerUp={endDrag}
-                  style={{
-                    "--tilt": `${[-2.2, 1.5, -0.6, 2.1, -1.4, 0.9][index % 6]}deg`,
-                    "--delay": `${Math.min(index, 10) * 70}ms`,
-                    "--note-left": `${muralMessage.x}%`,
-                    "--note-top": `${muralMessage.y}%`,
-                    zIndex: draggingId === muralMessage.id ? 45 : 12 + index,
-                  } as CSSProperties}
-                >
-                  <div className="pin" aria-hidden="true" />
-                  {muralMessage.imageDataUrl && (
-                    <img className="note-photo" src={muralMessage.imageDataUrl} alt="Birthday memory" draggable={false} />
-                  )}
-                  <p>{muralMessage.message}</p>
-                  <footer>
-                    <strong>{muralMessage.author}</strong>
-                  </footer>
-                </article>
-              ))}
-        </div>
-      </section>
-    </main>
-  );
+          <fieldset className="mural-appearance-picker" disabled={saving}>
+            <legend>Color<span>{noteColorNames[language][noteColor]}</span></legend>
+            <div className="mural-color-options">{NOTE_COLORS.map(color => <label className="mural-appearance-option" key={color} title={noteColorNames[language][color]}>
+              <input className="visually-hidden" type="radio" name="note-color" value={color} checked={noteColor === color} onChange={() => setNoteColor(color)} aria-label={noteColorNames[language][color]} />
+              <span className="mural-color-swatch mural-paper" data-color={color}><svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18"><path d="m5 10 3.5 3.5L15 7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+            </label>)}</div>
+          </fieldset>
+          <fieldset className="mural-appearance-picker" disabled={saving}>
+            <legend>{es ? "Diseño" : "Design"}</legend>
+            <div className="mural-design-options">{NOTE_DESIGNS.map(design => <label className="mural-appearance-option" key={design}>
+              <input className="visually-hidden" type="radio" name="note-design" value={design} checked={noteDesign === design} onChange={() => setNoteDesign(design)} aria-label={noteDesignNames[language][design]} />
+              <span className="mural-design-tile"><MuralNoteDesign design={design} /><span>{noteDesignNames[language][design]}</span></span>
+            </label>)}</div>
+          </fieldset>
+          <div className="photo-picker compact-photo-picker"><span className="photo-label">{muralCopy.photoLabel} / {es ? "OPCIONAL" : "OPTIONAL"}</span><input accept="image/*,.heic,.heif" aria-label={muralCopy.photoLabel} className="visually-hidden" onChange={handleImageChange} ref={fileInputRef} tabIndex={-1} type="file" disabled={saving || imageProcessing} /><button className="ghost-link" onClick={() => fileInputRef.current?.click()} type="button" disabled={saving || imageProcessing}>{imageProcessing ? (es ? "Preparando foto…" : "Preparing photo…") : muralCopy.photoButton}<span aria-hidden="true">＋</span></button></div>
+          {imageDataUrl && <div className="photo-preview compact-photo-preview"><img src={imageDataUrl} alt={es ? "Foto seleccionada" : "Selected photo"} /><button className="modal-close" onClick={() => setImageDataUrl(null)} type="button" disabled={saving} aria-label={muralCopy.removePhoto}>×</button></div>}
+          <div className="form-footer"><span className="character-counter">{muralCopy.characterCount(note.length)}</span><button className="confirm-button" disabled={saving || loading || imageProcessing || !author.trim() || !note.trim()} type="submit">{saving ? `${muralCopy.saving}…` : muralCopy.submit}<span aria-hidden="true">↗</span></button></div>
+        </form>
+      {feedback && <p className="mural-compose-feedback" role="status">{feedback}</p>}
+    </dialog>}
+  </main>;
 }
 
 
@@ -796,182 +754,11 @@ function readFileAsDataUrl(file: File) {
 function normalizeMuralMessage(message: MuralMessage): MuralMessage {
   return {
     ...message,
-    x: clamp(Number(message.x ?? 8), 0, 92),
-    y: clamp(Number(message.y ?? 8), 0, 92),
+    x: clamp(Number(message.x ?? 8), 0, 100),
+    y: clamp(Number(message.y ?? 8), 0, 100),
     imageDataUrl: message.imageDataUrl || null,
+    ...normalizeNoteAppearance(message.color, message.design),
   };
-}
-
-
-function arrangeMessages(messages: MuralMessage[], board: HTMLDivElement | null) {
-  const boardRect = board?.getBoundingClientRect();
-  const boardWidth = boardRect?.width || 1060;
-  const boardHeight = boardRect?.height || 760;
-  const placed: MuralMessage[] = [];
-  const changed: Array<{ id: number; x: number; y: number }> = [];
-
-  messages.forEach((message) => {
-    const width = Math.min(NOTE_ESTIMATE.width, boardWidth * 0.86);
-    const height = message.imageDataUrl ? PHOTO_NOTE_ESTIMATE_HEIGHT : NOTE_ESTIMATE.height;
-    const crowded = hasCrowdedOverlap(message.id, message.x, message.y, width, height, placed, {
-      width: boardWidth,
-      height: boardHeight,
-    });
-    const isProtected = isInProtectedMuralZone(message.x, message.y, width, height, board);
-
-    if (!crowded && !isProtected) {
-      placed.push(message);
-      return;
-    }
-
-    const position = findOpenPosition(placed, board, Boolean(message.imageDataUrl));
-    const moved = { ...message, x: position.x, y: position.y };
-    placed.push(moved);
-    changed.push({ id: message.id, x: position.x, y: position.y });
-  });
-
-  return { messages: placed, changed };
-}
-
-function findOpenPosition(messages: MuralMessage[], board: HTMLDivElement | null, hasPhoto: boolean) {
-  const boardRect = board?.getBoundingClientRect();
-  const boardWidth = boardRect?.width || 1060;
-  const boardHeight = boardRect?.height || 760;
-  const width = Math.min(NOTE_ESTIMATE.width, boardWidth * 0.86);
-  const height = hasPhoto ? PHOTO_NOTE_ESTIMATE_HEIGHT : NOTE_ESTIMATE.height;
-  const columns = [5, 29, 52, 8, 35, 58, 70, 18, 46];
-  const rows = [39, 63, 73, 48, 24, 57];
-
-  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-    for (let colIndex = 0; colIndex < columns.length; colIndex += 1) {
-      const jitter = ((messages.length + rowIndex + colIndex) % 3) * 1.6;
-      const position = clampNotePosition(
-        columns[(colIndex + messages.length) % columns.length] + jitter,
-        rows[(rowIndex + messages.length) % rows.length] - jitter,
-        width,
-        height,
-        boardWidth,
-        boardHeight,
-      );
-      const crowded = hasCrowdedOverlap(-1, position.x, position.y, width, height, messages, {
-        width: boardWidth,
-        height: boardHeight,
-      });
-      if (!crowded && !isInProtectedMuralZone(position.x, position.y, width, height, board)) return position;
-    }
-  }
-
-  return clampNotePosition(7 + ((messages.length * 17) % 70), 8 + ((messages.length * 23) % 66), width, height, boardWidth, boardHeight);
-}
-
-
-type ProtectedRect = Rect & { kind: "intro" | "composer" };
-
-function isInProtectedMuralZone(
-  x: number,
-  y: number,
-  width = NOTE_ESTIMATE.width,
-  height = NOTE_ESTIMATE.height,
-  board: HTMLDivElement | null = null,
-) {
-  const boardRect = board?.getBoundingClientRect();
-  const boardSize = { width: boardRect?.width || 1060, height: boardRect?.height || 760 };
-  const noteRect = percentToRect(x, y, width, height, boardSize.width, boardSize.height);
-
-  return getProtectedMuralRects(board, boardSize).some((protectedRect) => {
-    const allowedOverlap = protectedRect.kind === "intro" ? 0.34 : 0.08;
-    return getOverlapRatio(noteRect, protectedRect) > allowedOverlap;
-  });
-}
-
-function getProtectedMuralRects(
-  board: HTMLDivElement | null,
-  boardSize: Pick<DOMRect, "width" | "height">,
-): ProtectedRect[] {
-  if (!board) {
-    const composerWidth = Math.min(360, boardSize.width * 0.24);
-    return [
-      {
-        kind: "intro",
-        left: 0,
-        top: 0,
-        width: Math.min(380, boardSize.width * 0.22),
-        height: Math.min(230, boardSize.height * 0.28),
-      },
-      {
-        kind: "composer",
-        left: Math.max(0, boardSize.width - composerWidth - 28),
-        top: 0,
-        width: composerWidth + 28,
-        height: Math.min(460, boardSize.height * 0.48),
-      },
-    ];
-  }
-
-  const boardBounds = board.getBoundingClientRect();
-  return Array.from(board.querySelectorAll<HTMLElement>(".mural-board-intro, .mural-composer")).map((element) => {
-    const rect = element.getBoundingClientRect();
-    return {
-      kind: element.classList.contains("mural-composer") ? "composer" : "intro",
-      left: rect.left - boardBounds.left,
-      top: rect.top - boardBounds.top,
-      width: rect.width,
-      height: rect.height,
-    };
-  });
-}
-
-function clampNotePosition(x: number, y: number, width: number, height: number, boardWidth: number, boardHeight: number) {
-  const maxX = Math.max(0, ((boardWidth - width) / boardWidth) * 100);
-  const maxY = Math.max(0, ((boardHeight - height) / boardHeight) * 100);
-  return { x: clamp(x, 0, maxX), y: clamp(y, 0, maxY) };
-}
-
-function hasCrowdedOverlap(
-  activeId: number,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  messages: MuralMessage[],
-  boardRect: Pick<DOMRect, "width" | "height">,
-) {
-  const activeRect = percentToRect(x, y, width, height, boardRect.width, boardRect.height);
-
-  return messages.some((message) => {
-    if (message.id === activeId) return false;
-    const otherHeight = message.imageDataUrl ? PHOTO_NOTE_ESTIMATE_HEIGHT : NOTE_ESTIMATE.height;
-    const otherRect = percentToRect(
-      message.x,
-      message.y,
-      Math.min(NOTE_ESTIMATE.width, boardRect.width * 0.86),
-      otherHeight,
-      boardRect.width,
-      boardRect.height,
-    );
-    return getOverlapRatio(activeRect, otherRect) > MAX_NOTE_OVERLAP;
-  });
-}
-
-function percentToRect(x: number, y: number, width: number, height: number, boardWidth: number, boardHeight: number): Rect {
-  return {
-    left: (x / 100) * boardWidth,
-    top: (y / 100) * boardHeight,
-    width,
-    height,
-  };
-}
-
-function getOverlapRatio(a: Rect, b: Rect) {
-  const overlapWidth = Math.max(0, Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left));
-  const overlapHeight = Math.max(0, Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top));
-  const overlapArea = overlapWidth * overlapHeight;
-  if (!overlapArea) return 0;
-  return overlapArea / Math.min(a.width * a.height, b.width * b.height);
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
 }
 
 function LanguageToggle({
@@ -985,6 +772,7 @@ function LanguageToggle({
     <div className="language-toggle" aria-label="Language selector">
       <button
         className={language === "en" ? "active" : ""}
+        aria-pressed={language === "en"}
         onClick={() => onChange("en")}
         type="button"
       >
@@ -992,6 +780,7 @@ function LanguageToggle({
       </button>
       <button
         className={language === "es" ? "active" : ""}
+        aria-pressed={language === "es"}
         onClick={() => onChange("es")}
         type="button"
       >

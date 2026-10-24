@@ -1,0 +1,139 @@
+/* One shared canvas, no read/edit modes. Native panning stays separate from note dragging. */
+.birthday-page.notes-page {
+  --canvas: #100904; --cream: #ffedd7; --surface: #21160f; --bark: #382416;
+  --muted: #c2af99; --rule: #5b493a; --gutter: clamp(20px, 3.5vw, 60px);
+  --ease-out: cubic-bezier(.23, 1, .32, 1);
+  min-height: 100svh; padding: 0; overflow: clip; color: var(--cream); background: var(--canvas); isolation: isolate;
+}
+.notes-page::before { display: none; }
+.notes-page :is(h1,h2,h3,p) { margin: 0; }
+.notes-page :is(h1,h2,h3) { font-family: var(--sans); font-weight: 500; }
+.notes-page :is(button,a) { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.notes-page button { cursor: pointer; user-select: none; }
+.notes-page button:disabled { cursor: default; opacity: .5; }
+.notes-page :is(button,a,input,textarea):focus-visible { outline: 2px solid var(--cream); outline-offset: 4px; }
+.notes-page .kicker { color: var(--muted); font-size: 10px; line-height: 1.6; letter-spacing: .06em; font-weight: 500; }
+.notes-page .mural-nav { position: relative; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; padding: env(safe-area-inset-top) var(--gutter) 0; border-bottom: 1px dashed var(--rule); }
+.notes-page .mural-back { padding: 12px 0; min-height: 44px; border: 0; background: none; color: inherit; font-size: 10px; text-transform: uppercase; }
+.notes-page .mural-mark { color: inherit; text-decoration: none; font-size: 10px; font-weight: 600; letter-spacing: -.025em; }
+.notes-page .language-toggle { padding: 0; gap: 0; border: 0; box-shadow: none; background: none; backdrop-filter: none; }
+.notes-page .language-toggle button { min-width: 32px; min-height: 44px; padding: 6px; border: 0; border-radius: 0; color: var(--muted); background: none; font-size: 10px; box-shadow: none; }
+.notes-page .language-toggle button.active { color: var(--cream); background: none; text-decoration: underline; text-underline-offset: 6px; }
+.notes-page .mural-action { display: inline-flex; align-items: center; justify-content: space-between; gap: 35px; min-height: 48px; padding: 13px 22px; margin-top: 26px; border: 1px solid #ffedd77a; border-radius: 36px; background: none; color: var(--cream); font-size: 11px; text-transform: uppercase; transition: transform 160ms var(--ease-out), background 180ms ease; }
+.notes-page .mural-action span { font-size: 20px; line-height: 1; }
+.birthday-page.notes-page.mural-board-page { height: 100dvh; min-height: 0; display: grid; grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto minmax(0,1fr); overflow: hidden; }
+.notes-page .mural-board-heading { padding: 23px var(--gutter) 22px; }
+.notes-page .mural-board-heading h1 { display: flex; align-items: start; gap: 12px; max-width: none; width: fit-content; margin-bottom: 0; font-size: clamp(26px,4vw,45px); line-height: 1.1; letter-spacing: -.05em; }
+.notes-page .mural-board-heading h1 > span { font-size: 11px; line-height: 1.5; color: var(--muted); letter-spacing: 0; }
+.notes-page .mural-board-heading p { margin-top: 9px; font-size: 11px; line-height: 1.6; color: var(--muted); }
+.notes-page .mural-canvas-wrap { position: relative; min-width: 0; min-height: 0; border-top: 1px solid var(--rule); }
+.notes-page .mural-canvas-viewport { width: 100%; height: 100%; overflow: auto; overscroll-behavior: contain; touch-action: pan-x pan-y pinch-zoom; scrollbar-width: thin; scrollbar-color: #5b493a transparent; background: #160e08; cursor: grab; }
+.notes-page .mural-canvas-viewport.is-panning { cursor: grabbing; }
+.notes-page .mural-canvas { position: relative; display: block; padding: 0; background-image: radial-gradient(#ffedd725 1px, transparent 1px); background-size: 24px 24px; }
+.notes-page .mural-note-shell { position: absolute; width: 260px; }
+.notes-page .mural-paper { --note-paper: #ffedd7; background: var(--note-paper); color: #382416; }
+.notes-page .mural-paper[data-color="butter"] { --note-paper: #f3dfa0; }
+.notes-page .mural-paper[data-color="rose"] { --note-paper: #efc6c8; }
+.notes-page .mural-paper[data-color="lilac"] { --note-paper: #d9cdef; }
+.notes-page .mural-paper[data-color="sky"] { --note-paper: #c5dce8; }
+.notes-page .mural-paper[data-color="mint"] { --note-paper: #ccddc7; }
+.notes-page .mural-note-body { position: relative; display: flex; flex-direction: column; min-height: 250px; padding: 0 21px 21px; border: 1px solid #38241622; border-radius: 12px; overflow-wrap: anywhere; touch-action: none; }
+.notes-page .mural-note-design { display: block; width: 88px; height: 64px; flex-shrink: 0; pointer-events: none; color: #382416; }
+.notes-page .mural-birthday-detail { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -8px 0 12px; pointer-events: none; }
+.notes-page .mural-birthday-detail > span { max-width: 80px; font-size: 8px; line-height: 1.7; letter-spacing: .07em; opacity: .7; }
+.notes-page .mural-drag-handle { display: flex; justify-content: space-between; align-items: center; width: calc(100% + 42px); min-height: 48px; margin: 0 -21px 15px; padding: 10px 21px; border: 0; border-radius: 12px 12px 0 0; background: none; color: #382416; touch-action: none; cursor: grab; }
+.notes-page .mural-drag-handle > span { font-size: 8px; line-height: 1.5; letter-spacing: .025em; }
+.notes-page .mural-drag-handle svg { opacity: .6; flex-shrink: 0; }
+.notes-page .mural-drag-handle:focus-visible { outline-color: #382416; outline-offset: -5px; }
+.notes-page .mural-note-body > p { font-family: var(--display); font-size: 27px; font-weight: 500; letter-spacing: -.025em; line-height: 1.25; white-space: pre-wrap; margin-bottom: 30px; }
+.notes-page .mural-note-body footer { display: flex; justify-content: space-between; align-items: end; gap: 14px; border-top: 1px dashed #38241655; margin-top: auto; padding-top: 16px; }
+.notes-page .mural-note-body footer strong { min-width: 0; font-size: 10px; font-weight: 600; text-transform: uppercase; line-height: 1.6; }
+.notes-page .mural-note-body footer > span { font-size: 9px; flex-shrink: 0; }
+.notes-page .mural-note-photo { aspect-ratio: 4/3; overflow: hidden; border-radius: 8px; margin-bottom: 20px; }
+.notes-page .mural-note-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.notes-page .mural-note-shell.is-dragging { z-index: 10; }
+.notes-page .is-dragging .mural-note-body { outline: 1px solid #ffedd7; box-shadow: 0 12px 28px #0003; }
+.notes-page .is-dragging .mural-drag-handle { cursor: grabbing; }
+.notes-page .is-blocked .mural-note-body { outline: 2px dashed #c26739; outline-offset: 3px; }
+.notes-page .mural-create-note { position: absolute; z-index: 15; bottom: max(22px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 12px; min-height: 54px; padding: 12px 25px; border: 1px solid var(--cream); border-radius: 36px; color: var(--canvas); background: var(--cream); font-size: 13px; font-weight: 500; white-space: nowrap; box-shadow: 0 4px 18px #10090466; transition: opacity 160ms ease; }
+.notes-page .mural-create-note > span { font-size: 23px; line-height: 1; }
+.notes-page .mural-create-note:active { opacity: .8; }
+.notes-page .mural-canvas-notice { position: absolute; z-index: 5; top: 30%; left: 50%; transform: translateX(-50%); width: min(350px, calc(100% - 48px)); text-align: center; color: var(--muted); font-size: 14px; line-height: 1.7; background: var(--canvas); padding: 25px; border: 1px dashed var(--rule); border-radius: 12px; }
+.notes-page .mural-empty > span { font-size: 36px; color: var(--cream); }
+.notes-page .mural-empty h2 { font-size: 25px; line-height: 1.2; color: var(--cream); margin: 16px 0; }
+.notes-page .mural-canvas-feedback { position: absolute; z-index: 12; top: 14px; left: 50%; transform: translateX(-50%); width: min(480px, calc(100% - 48px)); padding: 14px 18px; background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; font-size: 12px; line-height: 1.5; text-align: center; pointer-events: none; }
+/* One action opens the composer; native dialog provides focus, Escape and inert backdrop. */
+.notes-page .mural-compose-dialog { width: 100%; max-width: 480px; max-height: calc(100dvh - 30px); position: fixed; inset: auto 0 0; margin: 0 auto; padding: 0; border: 1px solid var(--rule); border-radius: 24px 24px 0 0; background: var(--surface); color: var(--cream); overflow: auto; overscroll-behavior: contain; }
+.notes-page .mural-compose-dialog::backdrop { background: #100904b8; }
+.notes-page .mural-compose-close { position: absolute; top: 12px; right: 12px; z-index: 50; width: 44px; height: 44px; border: 1px solid var(--rule); border-radius: 50%; color: var(--cream); background: var(--surface); font-size: 26px; }
+.notes-page .mural-composer { position: relative; z-index: 1; inset: auto; width: 100%; max-height: none; max-width: none; margin: 0; padding: 32px 25px max(26px, env(safe-area-inset-bottom)); overflow: visible; background: none; border: 0; border-radius: 0; box-shadow: none; animation: none; }
+.notes-page .mural-composer .kicker { margin-bottom: 16px; }
+.notes-page .mural-composer h3 { font-size: 25px; line-height: 1.15; letter-spacing: -.04em; margin: 0 35px 24px 0; }
+.notes-page .mural-composer label, .notes-page .photo-label { font-size: 10px; font-weight: 500; letter-spacing: .03em; line-height: 1.5; margin: 18px 0 8px; color: var(--muted); }
+.notes-page .mural-composer :is(input:not([type=file]),textarea) { font-size: 16px; color: var(--cream); border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; background: transparent; box-shadow: none; outline-offset: 4px; padding: 10px 0; }
+.notes-page .mural-composer input { height: 48px; }
+.notes-page .mural-composer textarea { min-height: 110px; resize: vertical; line-height: 1.6; }
+.notes-page .mural-composer :is(input,textarea)::placeholder { color: #a18a74; }
+.notes-page .mural-composer :is(input,textarea):focus { background: none; box-shadow: none; border-color: var(--cream); }
+.notes-page .mural-draft-preview { padding: 13px 17px 10px; border-radius: 12px; }
+.notes-page .mural-draft-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; pointer-events: none; }
+.notes-page .mural-draft-heading > span { font-size: 8px; line-height: 1.6; letter-spacing: .04em; }
+.notes-page .mural-draft-heading .mural-note-design { width: 66px; height: 48px; }
+.notes-page .mural-composer .mural-draft-preview textarea { display: block; width: 100%; min-height: 90px; padding: 8px 0; border: 0; background: transparent; color: #382416; font-family: var(--display); font-size: 25px; line-height: 1.3; letter-spacing: -.025em; }
+.notes-page .mural-composer .mural-draft-preview textarea::placeholder { color: #715d4c; }
+.notes-page .mural-composer .mural-draft-preview textarea:focus-visible { outline-color: #382416; outline-offset: 2px; }
+.notes-page .mural-appearance-picker { min-width: 0; margin: 16px 0 0; padding: 0; border: 0; }
+.notes-page .mural-appearance-picker legend { width: 100%; padding: 0; margin-bottom: 5px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.notes-page .mural-appearance-picker legend > span { float: right; color: var(--cream); }
+.notes-page .mural-color-options { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); }
+.notes-page .mural-design-options { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 6px; }
+.notes-page .mural-composer .mural-appearance-option { position: relative; display: grid; place-items: center; min-width: 0; min-height: 44px; margin: 0; cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+.notes-page .mural-composer .mural-appearance-option input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; clip-path: inset(50%); overflow: hidden; }
+.notes-page .mural-color-swatch { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; }
+.notes-page .mural-color-swatch svg { visibility: hidden; }
+.notes-page input:checked + .mural-color-swatch { outline: 1px solid var(--cream); outline-offset: 4px; }
+.notes-page input:checked + .mural-color-swatch svg { visibility: visible; }
+.notes-page .mural-design-tile { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%; padding: 7px 3px; border: 1px solid var(--rule); border-radius: 10px; color: var(--muted); font-size: 10px; line-height: 1.4; }
+.notes-page .mural-design-tile .mural-note-design { width: 55px; height: 40px; border-radius: 6px; background: var(--cream); }
+.notes-page input:checked + .mural-design-tile { border-color: var(--cream); background: #ffedd70c; color: var(--cream); }
+.notes-page .mural-appearance-option input:focus-visible + span { outline: 2px solid var(--cream); outline-offset: 3px; }
+.notes-page .mural-appearance-option:active > span { transform: scale(.97); }
+.notes-page .mural-appearance-picker:disabled { opacity: .5; }
+.notes-page .mural-appearance-picker:disabled label { cursor: default; }
+.notes-page .compact-photo-picker { display: block; padding: 0; margin: 12px 0 0; border: 0; background: none; }
+.notes-page .compact-photo-picker input[type=file] { width: 1px; height: 1px; padding: 0; border: 0; }
+.notes-page .compact-photo-picker .ghost-link { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 12px 15px; border: 1px dashed var(--rule); border-radius: 12px; background: transparent; color: var(--cream); font-size: 12px; box-shadow: none; }
+.notes-page .photo-preview { border-radius: 12px; box-shadow: none; animation: none; }
+.notes-page .photo-preview img { max-height: 200px; object-fit: cover; }
+.notes-page .photo-preview .modal-close { position: absolute; display: grid; place-items: center; min-width: 44px; min-height: 44px; top: 8px; right: 8px; padding: 0; font-size: 24px; border: 1px solid #ffedd780; border-radius: 50%; background: var(--canvas); color: var(--cream); backdrop-filter: none; }
+.notes-page .form-footer { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+.notes-page .form-footer .character-counter { width: 100%; font-size: 9px; font-weight: 500; opacity: 1; color: var(--muted); text-align: right; letter-spacing: 0; }
+.notes-page .mural-composer .confirm-button { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 14px 20px; margin: 0; font-size: 11px; line-height: 1.5; text-transform: uppercase; font-weight: 500; border: 1px solid var(--cream); border-radius: 36px; background: var(--cream); color: var(--canvas); box-shadow: none; transition: transform 160ms var(--ease-out); }
+.notes-page .mural-composer .confirm-button > span { color: inherit; }
+.notes-page .mural-compose-feedback { padding: 0 25px 25px; font-size: 13px; color: var(--cream); line-height: 1.6; }
+.notes-page :is(.mural-action,.confirm-button):not(:disabled):active { transform: scale(.97); }
+@media (min-width: 700px) {
+  .notes-page .mural-board-heading { padding-block: 24px; }
+  .notes-page .mural-compose-dialog { inset: 0; margin: auto; border-radius: 20px; }
+  .notes-page .mural-create-note { left: auto; right: 28px; transform: none; }
+}
+@media (hover:hover) and (pointer:fine) {
+  .notes-page .mural-note-body { cursor: grab; }
+  .notes-page .mural-note-shell.is-dragging .mural-note-body { cursor: grabbing; }
+  .notes-page .mural-action:hover { background: var(--bark); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notes-page *, .notes-page *::before, .notes-page *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+/* Early access is a full page, not a keyboard-trapping modal. */
+.notes-page.mural-gate { min-height: 100svh; }
+.notes-page .mural-gate-panel { width: min(100%, 620px); margin: auto; padding: 65px var(--gutter) max(50px, env(safe-area-inset-bottom)); }
+.notes-page .mural-gate-mark { display: block; margin: 28px 0 22px; font-size: 50px; line-height: 1; }
+.notes-page .mural-gate-panel h1 { font-size: clamp(42px, 7vw, 76px); line-height: .95; letter-spacing: -.055em; text-transform: uppercase; margin-bottom: 25px; }
+.notes-page .mural-gate-panel > p { color: var(--muted); font-size: 15px; line-height: 1.7; margin-bottom: 18px; }
+.notes-page .mural-gate-panel form { margin-top: 30px; }
+.notes-page .mural-gate-panel label { display: block; margin-bottom: 12px; font-size: 11px; text-transform: uppercase; }
+.notes-page .mural-gate-panel input { width: 100%; min-height: 52px; padding: 12px 0; font-size: 16px; color: var(--cream); border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; background: transparent; }
+.notes-page .mural-gate-panel .mural-action { width: 100%; }
+.notes-page .mural-gate-panel .mural-access-error { color: #ffb194; margin-top: 20px; }
+.notes-page .mural-gate-panel .mural-opens-note { font-size: 12px; padding-top: 28px; margin-top: 30px; border-top: 1px dashed var(--rule); }

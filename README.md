@@ -12,8 +12,9 @@ Incluye:
 - Confirmación con clave de broma antes de guardar.
 - Terna irreversible persistida en PostgreSQL/Neon.
 - Ruta `/mural` para que amigas, amigos y familia dejen mensajes de cumpleaños persistidos como notas tipo post-it.
-- Los post-its del mural se pueden mover dentro del tablero; la posición se guarda y el UI evita que se tapen más de ~10%.
+- El mural abre directamente como un lienzo tipo Miro: arrastra cualquier nota con dedo o mouse y desplaza el fondo para recorrerlo. Una sola acción abre el formulario de nueva nota.
 - Cada post-it puede incluir una imagen opcional, persistida junto al mensaje.
+- Al crear una nota puedes elegir entre seis colores y diseños de confeti, globos, pastel o lisa, con vista previa. El estilo se guarda con cada nota y se conserva al moverla o recargar el mural.
 - Fotos HEIC/HEIF y fotos grandes se recortan/comprimen automáticamente antes de guardarse en una nota.
 
 ## Requisitos
@@ -146,7 +147,7 @@ La página puede verse en modo visual sin API, pero para guardar el destino o me
 
 ## Home editorial y fotografías
 
-La nueva portada está aislada en `src/BirthdayHome.tsx` y `src/birthday-home.css`; el mural conserva su diseño. Las 17 fotos nuevas aparecen en un álbum accesible con flechas, Escape y deslizamiento táctil. El home tiene textos EN/ES, movimiento reducido, bloqueo del mural hasta el 20 de noviembre y lectura/confirmación de los 3 destinos usando la misma API.
+La portada está aislada en `src/BirthdayHome.tsx` y `src/birthday-home.css`. Comparte con el mural una dirección editorial oscura, crema y cálida. El home tiene parallax moderado en móvil; las notas del lienzo solo se mueven al arrastrarlas. Las 17 fotos nuevas aparecen en un álbum accesible con flechas, Escape y deslizamiento táctil. El home tiene textos EN/ES, movimiento reducido, acceso con clave al mural hasta el 20 de noviembre y lectura/confirmación de los 3 destinos usando la misma API.
 
 Los originales de `public/birthday/` no se modifican. El home sirve únicamente copias WebP responsivas de 640 y 1280 px desde `public/birthday/editorial/`. Para regenerarlas después de cambiar las imágenes:
 
@@ -155,3 +156,27 @@ npm run images:birthday
 ```
 
 El orden, los textos alternativos y los pies de foto se editan en la colección `memories` de `src/BirthdayHome.tsx`. Agregar un archivo no lo publica automáticamente en el álbum: hay que incluirlo en esa colección.
+
+## Mural mobile-first y pruebas
+
+- `src/mural.css` define un lienzo a pantalla completa sin modos ni portada intermedia. Las notas se arrastran directamente; el fondo permite desplazamiento nativo en dos ejes (o arrastre de mouse). “Dejar una nota” abre un diálogo nativo con foco y Escape; cerrar no descarta el borrador.
+- `src/mural-layout.ts` usa un lienzo lógico compartido de 1600 px y notas de 260 px con alturas medidas, evita colisiones y conserva las notas dentro del tablero. El ancho del dispositivo no reordena notas. Cargar o redimensionar nunca envía posiciones al servidor. El arrastre incluye desplazamiento automático cerca de los bordes y las flechas de teclado funcionan desde la cabecera.
+- Los fallos de publicación conservan el borrador y la foto; los fallos de posición restauran la ubicación anterior. No se puede publicar mientras se prepara una imagen.
+- La ruta exige una clave antes del 20 de noviembre de 2026, medianoche de Toronto. Desde ese instante queda pública automáticamente según el reloj del servidor, sin depender del reloj del visitante.
+
+Pruebas de layout (Node 22; verificadas con 22.12):
+
+```bash
+npm test
+npm run build
+```
+
+Las comprobaciones de navegador deben interceptar `/api/messages`, `/api/messages/:id/position` y `/api/choice` para no alterar datos reales. Cubrir publicación/foto, errores/reintento, borradores, teclado, arrastre táctil, `pointercancel`, movimiento reducido, idiomas y tamaños 320–1920 px. La emulación no reemplaza una prueba final en iPhone/Safari real.
+
+## Clave temporal del mural
+
+Configurar `MURAL_PASSPHRASE` en el archivo `.env` local y en las variables de servidor del proyecto Vercel. No usar prefijo `VITE_`, no poner la clave en el código ni comitearla. Sin esta variable, el acceso anticipado permanece cerrado.
+
+`GET /api/mural-access` comprueba el acceso; `POST /api/mural-access` recibe la clave y crea una cookie HttpOnly firmada, SameSite=Strict y Secure sobre HTTPS. El servidor protege notas, subidas de imagen y cambios de posición; cambiar la fecha del navegador no evita el control. El endpoint de acceso no depende de la base de datos. Hay un límite básico de intentos por instancia (no sustituye rate limiting distribuido).
+
+El **20 de noviembre de 2026 a las 00:00 de America/Toronto (05:00 UTC)** se deja de exigir clave, incluso si sigue configurada la variable. Las páginas de acceso abiertas comprueban automáticamente el cambio. No hace falta una automatización ni volver a desplegar ese día. Las notas siguen almacenadas; no se borra ningún dato ni se modifica la clave de destinos.

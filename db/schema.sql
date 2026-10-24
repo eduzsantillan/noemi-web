@@ -34,13 +34,17 @@ CREATE TABLE IF NOT EXISTS birthday_mural_messages (
   note_x NUMERIC(6, 3) NOT NULL DEFAULT 8,
   note_y NUMERIC(6, 3) NOT NULL DEFAULT 8,
   image_data_url TEXT,
+  note_color TEXT NOT NULL DEFAULT 'cream' CHECK (note_color IN ('cream', 'butter', 'rose', 'lilac', 'sky', 'mint')),
+  note_design TEXT NOT NULL DEFAULT 'plain' CHECK (note_design IN ('plain', 'confetti', 'balloons', 'cake')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 ALTER TABLE birthday_mural_messages
   ADD COLUMN IF NOT EXISTS note_x NUMERIC(6, 3) NOT NULL DEFAULT 8,
   ADD COLUMN IF NOT EXISTS note_y NUMERIC(6, 3) NOT NULL DEFAULT 8,
-  ADD COLUMN IF NOT EXISTS image_data_url TEXT;
+  ADD COLUMN IF NOT EXISTS image_data_url TEXT,
+  ADD COLUMN IF NOT EXISTS note_color TEXT NOT NULL DEFAULT 'cream' CHECK (note_color IN ('cream', 'butter', 'rose', 'lilac', 'sky', 'mint')),
+  ADD COLUMN IF NOT EXISTS note_design TEXT NOT NULL DEFAULT 'plain' CHECK (note_design IN ('plain', 'confetti', 'balloons', 'cake'));
 
 CREATE INDEX IF NOT EXISTS birthday_mural_messages_created_at_idx
   ON birthday_mural_messages (created_at DESC);

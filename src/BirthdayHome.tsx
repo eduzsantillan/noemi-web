@@ -32,7 +32,7 @@ const homeCopy = {
     countdown: "Something beautiful is on its way.", until: "Until your day", chapter: "01 / The moments", galleryTitle: <>A life full of<br /><em>little wonders.</em></>,
     galleryText: "The places are beautiful. But you’ve always been the best part.", album: "Explore the album", openPhoto: "Open photo", close: "Close", previous: "Previous photo", next: "Next photo",
     full: "A collection of us", interlude: <>Anywhere is a good place.<br /><em>As long as it’s with you.</em></>,
-    gift: "02 / The next chapter", giftTitle: <>More world.<br /><em>More you.</em></>, giftText: "Six beautiful possibilities. One birthday adventure. All that’s missing is your choice.", giftNote: "Pick exactly three finalists. We’ll choose from that little dream list.",
+    gift: "02 / The next chapter", giftTitle: <>More world.<br /><em>More you.</em></>, giftText: "Eight beautiful possibilities. One birthday adventure. All that’s missing is your choice.", giftNote: "Pick exactly three finalists. We’ll choose from that little dream list.",
     selectedCount: (count: number) => `${count}/3 selected`, confirmFinalists: "Confirm the 3 finalists", needThree: "Choose 3 destinations to continue.", finalists: "Your three finalists", notReadyTitle: "Not ready yet", notReadyText: "This mural opens on November 20. For now, it is still collecting a little birthday magic.", notReadyCta: "I’ll wait",
     postcard: "A little less ordinary.", postcardSub: "Your next adventure is waiting.", country: ["Mexico", "Mexico", "Dominican Republic", "Caribbean", "Spain", "Panama", "Jamaica", "Curaçao"],
     mural: "A little love, from everyone.", muralText: "Some of the best gifts aren’t things. They’re words from your favorite people.", muralCta: "Visit your birthday mural",
@@ -46,7 +46,7 @@ const homeCopy = {
     countdown: "Algo bonito está por llegar.", until: "Para tu día", chapter: "01 / Los momentos", galleryTitle: <>La vida y sus<br /><em>pequeñas maravillas.</em></>,
     galleryText: "Los lugares son preciosos. Pero tú siempre has sido lo mejor.", album: "Explorar el álbum", openPhoto: "Abrir foto", close: "Cerrar", previous: "Foto anterior", next: "Foto siguiente",
     full: "Una colección de nosotros", interlude: <>Cualquier lugar es bonito.<br /><em>Si es contigo.</em></>,
-    gift: "02 / El próximo capítulo", giftTitle: <>Más mundo.<br /><em>Más tú.</em></>, giftText: "Seis posibilidades bonitas. Una aventura de cumpleaños. Solo falta que tú elijas.", giftNote: "Elige exactamente tres finalistas. De esa listita soñada sale la aventura.",
+    gift: "02 / El próximo capítulo", giftTitle: <>Más mundo.<br /><em>Más tú.</em></>, giftText: "Ocho posibilidades bonitas. Una aventura de cumpleaños. Solo falta que tú elijas.", giftNote: "Elige exactamente tres finalistas. De esa listita soñada sale la aventura.",
     selectedCount: (count: number) => `${count}/3 elegidos`, confirmFinalists: "Confirmar los 3 finalistas", needThree: "Elige 3 destinos para continuar.", finalists: "Tus tres finalistas", notReadyTitle: "No ready aún", notReadyText: "El mural se abre el 20 de noviembre. Por ahora está guardando magia de cumpleaños.", notReadyCta: "Yo espero",
     postcard: "Lejos de lo cotidiano.", postcardSub: "Tu próxima aventura te espera.", country: ["México", "México", "República Dominicana", "Caribe", "España", "Panamá", "Jamaica", "Curaçao"],
     mural: "Un poquito de amor, de todos.", muralText: "Los mejores regalos no siempre son cosas. A veces son palabras de tus personas favoritas.", muralCta: "Visitar tu mural de cumpleaños",
@@ -92,6 +92,7 @@ export default function BirthdayHome({ language, onLanguageChange, onNavigate, t
   const h = homeCopy[language];
   const pageRef = useRef<HTMLElement>(null);
   const sealedRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<HTMLDivElement>(null);
   const [countdown, setCountdown] = useState(countdownParts);
   const [albumIndex, setAlbumIndex] = useState<number | null>(null);
   const [choice, setChoice] = useState<Choice | null>(null);
@@ -100,7 +101,6 @@ export default function BirthdayHome({ language, onLanguageChange, onNavigate, t
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [selectedDestinations, setSelectedDestinations] = useState<Destination[]>([]);
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
-  const [isMuralLockedOpen, setIsMuralLockedOpen] = useState(false);
   const [passphrase, setPassphrase] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
@@ -121,23 +121,75 @@ export default function BirthdayHome({ language, onLanguageChange, onNavigate, t
   useEffect(() => {
     const page = pageRef.current;
     if (!page) return;
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const compact = window.matchMedia("(max-width: 760px)");
     const items = page.querySelectorAll<HTMLElement>("[data-reveal]");
     const observer = new IntersectionObserver((entries) => entries.forEach((entry) => {
       if (entry.isIntersecting) { entry.target.classList.add("is-visible"); observer.unobserve(entry.target); }
     }), { threshold: 0.08 });
     items.forEach((item) => { item.classList.add("reveal-ready"); observer.observe(item); });
+    const hero = page.querySelector<HTMLElement>(".ed-hero-image");
+    const masthead = page.querySelector<HTMLElement>(".ed-hero-masthead");
+    const gallery = Array.from(page.querySelectorAll<HTMLElement>(".ed-memory button"));
+    const progress = page.querySelector<HTMLElement>(".ed-progress");
+    const header = page.querySelector<HTMLElement>(".ed-header");
+    const cards = Array.from(page.querySelectorAll<HTMLElement>(".ed-scene-photo"));
+    const interlude = page.querySelector<HTMLElement>(".ed-interlude");
+    const interludeImage = interlude?.querySelector("img");
     let frame = 0;
     const update = () => {
       frame = 0;
-      const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-      page.style.setProperty("--page-progress", String(window.scrollY / max));
-      page.style.setProperty("--hero-shift", media.matches ? "0px" : `${Math.min(window.scrollY, 500) * 0.07}px`);
-      page.style.setProperty("--photo-shift", media.matches ? "0px" : `${Math.min(window.scrollY, 500) * -0.025}px`);
+      // Read geometry together, then write only transforms. No React updates per frame.
+      const height = window.innerHeight;
+      const scroll = window.scrollY;
+      const max = Math.max(1, document.documentElement.scrollHeight - height);
+      const sceneBounds = sceneRef.current?.getBoundingClientRect();
+      const interludeBounds = interlude?.getBoundingClientRect();
+      const still = reduced.matches;
+      const mobile = compact.matches;
+      const galleryRects = gallery.map(container => ({ container, rect: container.getBoundingClientRect() }));
+      progress?.style.setProperty("transform", `scaleX(${scroll / max})`);
+      header?.classList.toggle("is-scrolled", scroll > 60);
+      if (hero && scroll < height * 1.5) hero.style.transform = still ? "none" : `translate3d(0, ${Math.min(scroll, height) * (mobile ? 0.045 : 0.22)}px, 0) scale(${mobile ? 1.08 : 1.12})`;
+      if (masthead) masthead.style.transform = still ? "none" : `translate3d(0, ${-Math.min(scroll, height) * (mobile ? .025 : .09)}px, 0)`;
+      galleryRects.forEach(({ container, rect }, index) => {
+        const image = container.querySelector("img");
+        if (!image) return;
+        if (still) { image.style.transform = "none"; return; }
+        if (rect.top < height && rect.bottom > 0) {
+          const fraction = Math.min(1, Math.max(-1, (height / 2 - rect.top - rect.height / 2) / height));
+          image.style.transform = `translate3d(0, ${fraction * (index % 2 ? -1 : 1) * (mobile ? 10 : 24)}px, 0) scale(1.12)`;
+        }
+      });
+      if (sceneBounds) {
+        const fraction = mobile
+          ? Math.min(1, Math.max(0, (height - sceneBounds.top) / (height + sceneBounds.height)))
+          : Math.min(1, Math.max(0, -sceneBounds.top / Math.max(1, sceneBounds.height - height)));
+        cards.forEach((card, index) => {
+          if (still) { card.style.removeProperty("transform"); return; }
+          const direction = index - 1;
+          const spread = mobile ? 30 + fraction * 12 : 38 + fraction * (window.innerWidth > 1100 ? 70 : 20);
+          const lift = mobile ? direction * -12 + fraction * direction * 8 : direction * -24 + Math.sin(fraction * Math.PI) * direction * 26;
+          card.style.transform = `translate3d(${direction * spread}px, ${lift}px, 0) rotate(${direction * (9 + fraction * (mobile ? 3 : 7))}deg)`;
+        });
+      }
+      if (interludeImage && interludeBounds && interludeBounds.top < height && interludeBounds.bottom > 0) {
+        interludeImage.style.transform = still ? "none" : `translate3d(0, ${(interludeBounds.top - height / 2) * (mobile ? -0.025 : -0.1)}px, 0) scale(1.18)`;
+      }
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
-    update(); window.addEventListener("scroll", schedule, { passive: true }); window.addEventListener("resize", schedule); media.addEventListener("change", schedule);
-    return () => { observer.disconnect(); cancelAnimationFrame(frame); window.removeEventListener("scroll", schedule); window.removeEventListener("resize", schedule); media.removeEventListener("change", schedule); };
+    const resizeObserver = new ResizeObserver(schedule);
+    resizeObserver.observe(page);
+    update();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    reduced.addEventListener("change", schedule);
+    compact.addEventListener("change", schedule);
+    return () => {
+      observer.disconnect(); resizeObserver.disconnect(); cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule); window.removeEventListener("resize", schedule);
+      reduced.removeEventListener("change", schedule); compact.removeEventListener("change", schedule);
+    };
   }, []);
 
   useEffect(() => {
@@ -167,8 +219,7 @@ export default function BirthdayHome({ language, onLanguageChange, onNavigate, t
     });
   }
   function requestMural() {
-    if (countdown.isBirthday) onNavigate("/mural");
-    else setIsMuralLockedOpen(true);
+    onNavigate("/mural");
   }
   async function confirmDestination() {
     if (selectedDestinations.length !== 3 || saving || !passphrase.trim()) return;
@@ -190,7 +241,7 @@ export default function BirthdayHome({ language, onLanguageChange, onNavigate, t
     <a className="ed-skip" href="#getaway">{h.skip}</a>
     <div className="ed-progress" aria-hidden="true" />
     <header className="ed-header">
-      <a className="ed-wordmark" href="#beginning" aria-label="Noemi">noemi<SparkIcon /></a>
+      <a className="ed-wordmark" href="#beginning" aria-label="Noemi">NOEMI<span className="ed-brand-dot" /></a>
       <nav aria-label={language === "en" ? "Main navigation" : "Navegación principal"}>
         <a href="#memories" onClick={(e) => { e.preventDefault(); moveTo("memories"); }}>{h.memories}</a>
         <a href="#getaway" onClick={(e) => { e.preventDefault(); moveTo("getaway"); }}>{h.getaway}</a>
@@ -201,28 +252,31 @@ export default function BirthdayHome({ language, onLanguageChange, onNavigate, t
       </div>
     </header>
 
+    <aside className="ed-edition-rail" aria-hidden="true"><span className="ed-rail-dot" />NOEMI — BIRTHDAY EDITION<span>20.11.2026</span></aside>
     <section className="ed-hero" id="beginning" aria-labelledby="ed-title">
-      <div className="ed-issue"><span>{h.edition}</span><span>20.11 <i /> {h.date}</span></div>
-      <div className="ed-hero-layout">
-        <div className="ed-hero-copy">
-          <p className="ed-eyebrow"><SparkIcon className="ed-star" />{h.eyebrow}</p>
-          <h1 id="ed-title">{h.title}</h1>
-          <p className="ed-intro">{h.intro}</p>
-          <button className="ed-pill" onClick={() => moveTo("getaway")}>{h.discover}<span><Arrow diagonal /></span></button>
-          <div className="ed-love-note">
-            <button className="ed-tiny-photo" onClick={() => setAlbumIndex(1)} aria-label={`${h.openPhoto}: ${memories[1][language]}`}><Photo index={1} language={language} sizes="140px" /></button>
-            <div><span className="ed-handwritten">with love, always.</span><p>{h.madeFor}</p></div>
-          </div>
-        </div>
-        <div className="ed-hero-art">
-          <button className="ed-cover-photo" onClick={() => setAlbumIndex(0)} aria-label={`${h.openPhoto}: ${memories[0][language]}`}><Photo index={0} language={language} priority sizes="(max-width: 700px) 85vw, 44vw" /><span className="ed-image-open"><Arrow diagonal /></span></button>
-          <div className="ed-stamp" aria-hidden="true"><span>JUST FOR YOU</span><b>20</b><span>NOVEMBER</span></div>
-          <button className="ed-pool-photo" onClick={() => setAlbumIndex(2)} aria-label={`${h.openPhoto}: ${memories[2][language]}`}><Photo index={2} language={language} sizes="(max-width: 700px) 38vw, 18vw" /><span>DO NOT DISTURB. ♡</span></button>
-          <span className="ed-photo-annotation">{h.heroCaption}</span>
-          <span className="ed-vertical-caption">NOEMI / THE GOOD LIFE COLLECTION</span>
-        </div>
+      <div className="ed-hero-image"><Photo index={0} language={language} priority sizes="100vw" /></div>
+      <div className="ed-hero-shade" aria-hidden="true" />
+      <div className="ed-hero-masthead">
+        <p className="ed-eyebrow">{h.eyebrow}</p>
+        <h1 id="ed-title">NOEMI<span className="ed-title-dot">®</span><span className="ed-sr-only"> — {h.edition}</span></h1>
+        <span className="ed-hero-serial">N° 01 / {language === "es" ? "UNA EDICIÓN ÚNICA" : "ONE OF A KIND"}</span>
       </div>
-      <div className="ed-hero-bottom"><span>{h.scroll}</span><span aria-hidden="true">↓</span><span>EST. WITH LOVE — ∞</span></div>
+      <div className="ed-hero-copy">
+        <span className="ed-label">{h.edition}</span>
+        <h2>{h.title}</h2>
+        <p className="ed-intro">{h.intro}</p>
+        <button className="ed-pill" onClick={() => moveTo("getaway")}>{h.discover}<Arrow diagonal /></button>
+      </div>
+      <div className="ed-dedication">
+        <span className="ed-label">{h.madeFor}</span>
+        <SparkIcon />
+        <p>{language === "es" ? <>No es un día cualquiera.<br />Es el tuyo.</> : <>Not just another day.<br />Your day.</>}</p>
+        <span className="ed-label">20 NOVEMBER / 2026</span>
+      </div>
+      <button className="ed-hero-album" onClick={() => setAlbumIndex(0)} aria-label={h.album}>
+        <Photo index={1} language={language} sizes="180px" /><span>{h.album}<Arrow diagonal /></span>
+      </button>
+      <button className="ed-scroll-cue" onClick={() => moveTo("memories")}><span aria-hidden="true">↓</span>{h.scroll}</button>
     </section>
 
     <section className="ed-countdown" aria-label={t.countdownLabel} data-reveal>
@@ -231,8 +285,19 @@ export default function BirthdayHome({ language, onLanguageChange, onNavigate, t
     </section>
 
     <section className="ed-memories" id="memories" aria-labelledby="memories-title">
-      <div className="ed-section-top" data-reveal><span className="ed-label">{h.chapter}</span><span className="ed-label">A PERSONAL ARCHIVE / ♡</span></div>
-      <div className="ed-memory-intro" data-reveal><h2 id="memories-title">{h.galleryTitle}</h2><div><p>{h.galleryText}</p><button className="ed-text-link" onClick={() => setAlbumIndex(0)}>{h.album}<Arrow diagonal /></button></div></div>
+      <div className="ed-section-top" data-reveal><span className="ed-label">{h.chapter}</span><span className="ed-label">{language === "es" ? "UN ARCHIVO PERSONAL" : "A PERSONAL ARCHIVE"} / 17</span></div>
+      <div className="ed-memory-scene" ref={sceneRef}>
+        <div className="ed-scene-sticky">
+          <div className="ed-scene-heading" data-reveal><span className="ed-label">{language === "es" ? "LOS MEJORES MOMENTOS" : "THE BEST MOMENTS"}</span><h2 id="memories-title">{h.galleryTitle}</h2></div>
+          <div className="ed-scene-stack">
+            {[2, 0, 8].map((index, position) => <button className={`ed-scene-photo ed-scene-photo-${position + 1}`} key={index} onClick={() => setAlbumIndex(index)} aria-label={`${h.openPhoto}: ${memories[index][language]}`}>
+              <Photo index={index} language={language} sizes="(max-width: 760px) 56vw, 28vw" /><span>{String(position + 1).padStart(2, "0")} / {memories[index][language]}<Arrow diagonal /></span>
+            </button>)}
+          </div>
+          <div className="ed-scene-description" data-reveal><p>{h.galleryText}</p><button className="ed-text-link" onClick={() => setAlbumIndex(0)}>{h.album}<Arrow diagonal /></button></div>
+          <div className="ed-scene-bottom ed-label"><span>{language === "es" ? "RECUERDOS, NO COSAS." : "MEMORIES, NOT THINGS."}</span><span>01 — 17</span></div>
+        </div>
+      </div>
       <div className="ed-memory-grid">
         {[3, 4, 5, 7, 6, 8].map((index, position) => <figure className={`ed-memory ed-memory-${position + 1}`} data-reveal key={index}>
           <button onClick={() => setAlbumIndex(index)} aria-label={`${h.openPhoto}: ${memories[index][language]}`}><Photo index={index} language={language} sizes="(max-width: 700px) 44vw, 30vw" /><span className="ed-image-open"><Arrow diagonal /></span></button>
@@ -245,14 +310,14 @@ export default function BirthdayHome({ language, onLanguageChange, onNavigate, t
 
     <section className="ed-interlude" aria-label={h.full}>
       <Photo index={1} language={language} sizes="100vw" />
-      <div className="ed-interlude-copy" data-reveal><span className="ed-label">A NOTE TO YOU</span><h2>{h.interlude}</h2><span className="ed-signature">♡</span></div>
+      <div className="ed-interlude-copy" data-reveal><span className="ed-label">{language === "es" ? "UNA NOTA PARA TI" : "A NOTE TO YOU"}</span><h2>{h.interlude}</h2><span className="ed-signature">♡</span></div>
     </section>
 
     <section className="ed-getaway" id="getaway" aria-labelledby="getaway-title">
       <div className="ed-section-top" data-reveal><span className="ed-label">{h.gift}</span><span className="ed-label">{t.heroKicker}</span></div>
       <div className="ed-getaway-heading" data-reveal><h2 id="getaway-title">{h.giftTitle}</h2><p>{h.giftText}</p></div>
       <div className="ed-getaway-layout">
-        <div className="ed-postcard" data-reveal><Photo index={7} language={language} sizes="(max-width: 700px) 90vw, 38vw" /><div><span className="ed-label">THE NEXT GOOD MEMORY</span><h3>{h.postcard}</h3><p>{h.postcardSub}</p></div><span className="ed-postmark" aria-hidden="true">N. / 20 NOV<br />WITH LOVE</span></div>
+        <div className="ed-postcard" data-reveal><Photo index={7} language={language} sizes="(max-width: 700px) 90vw, 38vw" /><div><span className="ed-label">{language === "es" ? "EL PRÓXIMO GRAN RECUERDO" : "THE NEXT GOOD MEMORY"}</span><h3>{h.postcard}</h3><p>{h.postcardSub}</p></div><span className="ed-postmark" aria-hidden="true">20 / 11<SparkIcon /></span></div>
         <div className="ed-destination-list" data-reveal aria-busy={choiceLoading}>
           <p className="ed-destination-note">{h.giftNote}<span aria-hidden="true">↙</span></p>
           {savedDestinations.length > 0 && <div className="ed-sealed" role="status" tabIndex={-1} ref={sealedRef}><span>{h.sealed}</span><strong>{savedDestinations.map((destination) => destination.name).join(" · ")} <span aria-hidden="true">♡</span></strong></div>}
@@ -273,7 +338,7 @@ export default function BirthdayHome({ language, onLanguageChange, onNavigate, t
     </section>
 
     <section className="ed-mural-invitation" data-reveal><span aria-hidden="true" className="ed-envelope">♡</span><div><span className="ed-label">03 / {language === "en" ? "The love notes" : "Las notas de amor"}</span><h2>{h.mural}</h2><p>{h.muralText}</p></div><button className="ed-round-link" onClick={requestMural} aria-label={h.muralCta}><Arrow diagonal /></button></section>
-    <footer className="ed-footer"><div><p>{h.footer}</p><button className="ed-text-link" onClick={() => moveTo("beginning")}>{h.top}<span aria-hidden="true">↑</span></button></div><span className="ed-footer-name" aria-hidden="true">Noemi<SparkIcon /></span><div className="ed-footer-bottom"><span>{h.madeFor}</span><span>20 NOVEMBER 2026</span><span>THE BEST IS YET TO COME.</span></div></footer>
+    <footer className="ed-footer"><div><p>{h.footer}</p><button className="ed-text-link" onClick={() => moveTo("beginning")}>{h.top}<span aria-hidden="true">↑</span></button></div><span className="ed-footer-name" aria-hidden="true">NOEMI<span>®</span></span><div className="ed-footer-bottom"><span>{h.madeFor}</span><span>20 NOVEMBER 2026</span><span>THE BEST IS YET TO COME.</span></div></footer>
 
     {albumIndex !== null && <Overlay className="ed-album" label={h.full} onClose={() => setAlbumIndex(null)}>
       <div className="ed-album-header"><span>{h.full}</span><span>{String(albumIndex + 1).padStart(2, "0")} / {memories.length}</span><button data-initial-focus onClick={() => setAlbumIndex(null)} aria-label={h.close}>×</button></div>
@@ -291,10 +356,7 @@ export default function BirthdayHome({ language, onLanguageChange, onNavigate, t
       <span className="ed-label">{t.modalKicker}</span><SparkIcon className="ed-confirm-star" /><h2>{h.finalists}</h2><p>{selectedDestinations.map((destination) => destination.name).join(" · ")}</p><p>{t.modalText}</p>
       <form onSubmit={(event) => { event.preventDefault(); void confirmDestination(); }}><label htmlFor="destination-key">{t.secretLabel}</label><input data-initial-focus id="destination-key" type="password" autoComplete="off" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} placeholder={t.secretPlaceholder} disabled={saving} aria-describedby={saveError ? "choice-save-error" : undefined} />{saveError && <p className="ed-form-error" id="choice-save-error" role="alert">{h.saveError}</p>}<button className="ed-pill" disabled={saving || !passphrase.trim()}>{saving ? h.saving : t.saveDestination}<span><Arrow diagonal /></span></button></form>
     </Overlay>}
-    {isMuralLockedOpen && <Overlay className="ed-confirmation ed-locked-mural" label={h.notReadyTitle} onClose={() => setIsMuralLockedOpen(false)}>
-      <button className="ed-dialog-close" data-initial-focus onClick={() => setIsMuralLockedOpen(false)} aria-label={h.close}>×</button>
-      <span className="ed-label">20 NOVEMBER ONLY</span><SparkIcon className="ed-confirm-star" /><h2>{h.notReadyTitle}</h2><p>{h.notReadyText}</p><button className="ed-pill" onClick={() => setIsMuralLockedOpen(false)}>{h.notReadyCta}<span><Arrow diagonal /></span></button>
-    </Overlay>}
+
 
     {countdown.isBirthday && <div className="ed-celebration" aria-hidden="true">{Array.from({ length: 24 }, (_, index) => <i key={index} style={{ "--i": index } as CSSProperties} />)}{Array.from({ length: 9 }, (_, index) => <span className="ed-birthday-balloon" key={index} style={{ "--i": index } as CSSProperties} />)}</div>}
   </main>;
