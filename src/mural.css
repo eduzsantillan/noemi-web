@@ -125,15 +125,3 @@
 @media (prefers-reduced-motion: reduce) {
   .notes-page *, .notes-page *::before, .notes-page *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
-/* Early access is a full page, not a keyboard-trapping modal. */
-.notes-page.mural-gate { min-height: 100svh; }
-.notes-page .mural-gate-panel { width: min(100%, 620px); margin: auto; padding: 65px var(--gutter) max(50px, env(safe-area-inset-bottom)); }
-.notes-page .mural-gate-mark { display: block; margin: 28px 0 22px; font-size: 50px; line-height: 1; }
-.notes-page .mural-gate-panel h1 { font-size: clamp(42px, 7vw, 76px); line-height: .95; letter-spacing: -.055em; text-transform: uppercase; margin-bottom: 25px; }
-.notes-page .mural-gate-panel > p { color: var(--muted); font-size: 15px; line-height: 1.7; margin-bottom: 18px; }
-.notes-page .mural-gate-panel form { margin-top: 30px; }
-.notes-page .mural-gate-panel label { display: block; margin-bottom: 12px; font-size: 11px; text-transform: uppercase; }
-.notes-page .mural-gate-panel input { width: 100%; min-height: 52px; padding: 12px 0; font-size: 16px; color: var(--cream); border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; background: transparent; }
-.notes-page .mural-gate-panel .mural-action { width: 100%; }
-.notes-page .mural-gate-panel .mural-access-error { color: #ffb194; margin-top: 20px; }
-.notes-page .mural-gate-panel .mural-opens-note { font-size: 12px; padding-top: 28px; margin-top: 30px; border-top: 1px dashed var(--rule); }

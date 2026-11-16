@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import pg from 'pg';
 import sharp from 'sharp';
-import { authenticateMural, isMuralProtectedPath, muralAccessState } from './mural-access.mjs';
+import { muralAccessState } from './mural-access.mjs';
 import { isValidNoteAppearance, normalizeNoteAppearance } from '../shared/mural-appearance.mjs';
 
 loadDotEnv();
@@ -109,6 +109,7 @@ export async function ensureSchema() {
       message TEXT NOT NULL CHECK (char_length(trim(message)) BETWEEN 1 AND 500),
       note_x NUMERIC(6, 3) NOT NULL DEFAULT 8,
       note_y NUMERIC(6, 3) NOT NULL DEFAULT 8,
+      note_position_height INTEGER NOT NULL DEFAULT 1080 CHECK (note_position_height BETWEEN 1080 AND 1000000),
       image_data_url TEXT,
       note_color TEXT NOT NULL DEFAULT 'cream' CHECK (note_color IN ('cream', 'butter', 'rose', 'lilac', 'sky', 'mint')),
       note_design TEXT NOT NULL DEFAULT 'plain' CHECK (note_design IN ('plain', 'confetti', 'balloons', 'cake')),
@@ -120,6 +121,7 @@ export async function ensureSchema() {
     ALTER TABLE birthday_mural_messages
       ADD COLUMN IF NOT EXISTS note_x NUMERIC(6, 3) NOT NULL DEFAULT 8,
       ADD COLUMN IF NOT EXISTS note_y NUMERIC(6, 3) NOT NULL DEFAULT 8,
+      ADD COLUMN IF NOT EXISTS note_position_height INTEGER NOT NULL DEFAULT 1080 CHECK (note_position_height BETWEEN 1080 AND 1000000),
       ADD COLUMN IF NOT EXISTS image_data_url TEXT,
       ADD COLUMN IF NOT EXISTS note_color TEXT NOT NULL DEFAULT 'cream' CHECK (note_color IN ('cream', 'butter', 'rose', 'lilac', 'sky', 'mint')),
       ADD COLUMN IF NOT EXISTS note_design TEXT NOT NULL DEFAULT 'plain' CHECK (note_design IN ('plain', 'confetti', 'balloons', 'cake'));
@@ -151,6 +153,7 @@ function toMuralMessage(row) {
     createdAt: row.created_at,
     x: Number(row.note_x),
     y: Number(row.note_y),
+    positionHeight: Number(row.note_position_height ?? 1080),
     imageDataUrl: row.image_data_url ?? null,
     ...normalizeNoteAppearance(row.note_color, row.note_design),
   };
@@ -274,6 +277,10 @@ function isValidPosition(value) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100;
 }
 
+function isValidPositionHeight(value) {
+  return Number.isInteger(value) && value >= 1080 && value <= 1_000_000;
+}
+
 function normalizeImageDataUrl(value) {
   if (value == null || value === '') return null;
   if (typeof value !== 'string') return null;
@@ -286,22 +293,10 @@ export async function handleApi(request, response, url) {
   if (url.pathname === '/api/mural-access') {
     const state = muralAccessState(request);
     if (request.method === 'GET') return sendJson(response, 200, state);
-    if (request.method === 'POST') {
-      try {
-        const { passphrase } = await readJson(request, 4096);
-        const result = authenticateMural(request, passphrase);
-        if (result.cookie) response.setHeader('set-cookie', result.cookie);
-        return sendJson(response, result.status, { ...state, authorized: result.authorized,
-          error: result.status === 429 ? 'Demasiados intentos. Espera un minuto.' : result.status === 503 ? 'El acceso aún no está configurado.' : result.authorized ? undefined : 'Clave incorrecta.' });
-      } catch { return sendJson(response, 400, { error: 'Solicitud inválida.' }); }
-    }
+    if (request.method === 'POST') return sendJson(response, 200, state);
     response.setHeader('allow', 'GET, POST');
     return sendJson(response, 405, { error: 'Método no permitido.' });
   }
-  if (isMuralProtectedPath(url.pathname) && !muralAccessState(request).authorized) {
-    return sendJson(response, 401, { error: 'Se necesita la clave del mural.', code: 'MURAL_ACCESS_REQUIRED' });
-  }
-
   if (request.method === 'GET' && url.pathname === '/api/health') {
     try {
       await pool.query('SELECT 1');
@@ -341,7 +336,7 @@ export async function handleApi(request, response, url) {
   if (request.method === 'GET' && url.pathname === '/api/messages') {
     try {
       const result = await pool.query(
-        `SELECT id, author, message, note_x, note_y, image_data_url, note_color, note_design, created_at
+        `SELECT id, author, message, note_x, note_y, image_data_url, note_color, note_design, note_position_height, created_at
          FROM birthday_mural_messages
          ORDER BY created_at DESC, id DESC
          LIMIT 120`,
@@ -354,7 +349,7 @@ export async function handleApi(request, response, url) {
 
   if (request.method === 'POST' && url.pathname === '/api/messages') {
     try {
-      const { author, message, x, y, imageDataUrl, color, design } = await readJson(request);
+      const { author, message, x, y, imageDataUrl, color, design, positionHeight = 1080 } = await readJson(request);
       const cleanAuthor = typeof author === 'string' ? author.trim().replace(/\s+/g, ' ') : '';
       const cleanMessage = typeof message === 'string' ? message.trim() : '';
       const cleanImageDataUrl = normalizeImageDataUrl(imageDataUrl);
@@ -366,6 +361,7 @@ export async function handleApi(request, response, url) {
         cleanMessage.length > 500 ||
         !isValidPosition(x) ||
         !isValidPosition(y) ||
+        !isValidPositionHeight(positionHeight) ||
         cleanImageDataUrl === undefined ||
         !isValidNoteAppearance(color, design)
       ) {
@@ -374,10 +370,10 @@ export async function handleApi(request, response, url) {
 
       const appearance = normalizeNoteAppearance(color, design);
       const result = await pool.query(
-        `INSERT INTO birthday_mural_messages (author, message, note_x, note_y, image_data_url, note_color, note_design)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING id, author, message, note_x, note_y, image_data_url, note_color, note_design, created_at`,
-        [cleanAuthor, cleanMessage, x, y, cleanImageDataUrl, appearance.color, appearance.design],
+        `INSERT INTO birthday_mural_messages (author, message, note_x, note_y, image_data_url, note_color, note_design, note_position_height)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, author, message, note_x, note_y, image_data_url, note_color, note_design, note_position_height, created_at`,
+        [cleanAuthor, cleanMessage, x, y, cleanImageDataUrl, appearance.color, appearance.design, positionHeight],
       );
 
       return sendJson(response, 201, { message: toMuralMessage(result.rows[0]) });
@@ -391,18 +387,18 @@ export async function handleApi(request, response, url) {
   if (request.method === 'PATCH' && positionMatch) {
     try {
       const id = Number(positionMatch[1]);
-      const { x, y } = await readJson(request, 50_000);
+      const { x, y, positionHeight = 1080 } = await readJson(request, 50_000);
 
-      if (!Number.isSafeInteger(id) || !isValidPosition(x) || !isValidPosition(y)) {
+      if (!Number.isSafeInteger(id) || !isValidPosition(x) || !isValidPosition(y) || !isValidPositionHeight(positionHeight)) {
         return sendJson(response, 400, { error: 'Posición inválida.' });
       }
 
       const result = await pool.query(
         `UPDATE birthday_mural_messages
-         SET note_x = $1, note_y = $2
+         SET note_x = $1, note_y = $2, note_position_height = $4
          WHERE id = $3
-         RETURNING id, author, message, note_x, note_y, image_data_url, note_color, note_design, created_at`,
-        [x, y, id],
+         RETURNING id, author, message, note_x, note_y, image_data_url, note_color, note_design, note_position_height, created_at`,
+        [x, y, id, positionHeight],
       );
 
       if (!result.rows[0]) return sendJson(response, 404, { error: 'Mensaje no encontrado.' });

@@ -4,7 +4,6 @@ import { Readable } from 'node:stream';
 import { readFile } from 'node:fs/promises';
 import pg from 'pg';
 import { NOTE_COLORS, NOTE_DESIGNS, isValidNoteAppearance, normalizeNoteAppearance } from '../shared/mural-appearance.mjs';
-import { MURAL_OPENS_AT } from '../server/mural-access.mjs';
 
 test('every offered color and birthday design is accepted without changing it', () => {
   assert.equal(NOTE_COLORS.length, 6);
@@ -46,19 +45,18 @@ test('schema creation and additive migration have the same allowed styles as the
 
 test('note API saves, reads and preserves styles with no real database writes', async t => {
   const { handleApi } = await import('../server/api.mjs');
-  const realQuery = pg.Pool.prototype.query, realNow = Date.now;
+  const realQuery = pg.Pool.prototype.query;
   const base = { id: '19', author: 'Amiga', message: 'Feliz cumpleaños', note_x: '8', note_y: '8', image_data_url: null, created_at: '2026-11-20T12:00:00Z' };
   let stored = { ...base }, queries = [];
-  Date.now = () => MURAL_OPENS_AT + 1;
   pg.Pool.prototype.query = async function (sql, values) {
     queries.push({ sql, values });
     assert.match(sql, /note_color, note_design/);
     if (sql.includes('INSERT INTO birthday_mural_messages')) {
-      assert.match(sql, /VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7\)/);
-      stored = { ...base, author: values[0], message: values[1], note_x: values[2], note_y: values[3], image_data_url: values[4], note_color: values[5], note_design: values[6] };
+      assert.match(sql, /VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, \$8\)/);
+      stored = { ...base, author: values[0], message: values[1], note_x: values[2], note_y: values[3], image_data_url: values[4], note_color: values[5], note_design: values[6], note_position_height: values[7] };
     } else if (sql.includes('UPDATE birthday_mural_messages')) {
-      assert.match(sql, /SET note_x = \$1, note_y = \$2\s+WHERE id = \$3/);
-      stored = { ...stored, note_x: values[0], note_y: values[1] };
+      assert.match(sql, /SET note_x = \$1, note_y = \$2, note_position_height = \$4\s+WHERE id = \$3/);
+      stored = { ...stored, note_x: values[0], note_y: values[1], note_position_height: values[3] };
     } else assert.match(sql, /SELECT .* FROM birthday_mural_messages/s);
     return { rows: [{ ...stored }] };
   };
@@ -104,5 +102,5 @@ test('note API saves, reads and preserves styles with no real database writes', 
       const loaded = await call('GET', '/api/messages');
       assert.equal(loaded.body.messages[0].color, 'cream'); assert.equal(loaded.body.messages[0].design, 'plain');
     });
-  } finally { pg.Pool.prototype.query = realQuery; Date.now = realNow; }
+  } finally { pg.Pool.prototype.query = realQuery; }
 });

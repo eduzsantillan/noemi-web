@@ -1,79 +1,61 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
-import { authenticateMural, isMuralProtectedPath, muralAccessState, MURAL_OPENS_AT } from '../server/mural-access.mjs';
+import pg from 'pg';
+import { muralAccessState } from '../server/mural-access.mjs';
 
-const before = MURAL_OPENS_AT - 60_000;
-const secret = 'unit-test-only-not-a-real-password';
-const request = (cookie='', ip='test-client') => ({ headers: { cookie, 'x-forwarded-for': ip }, socket: {} });
-const cookieFrom = result => result.cookie.split(';')[0];
+const request = (method, payload) => {
+  const req = Readable.from(payload === undefined ? [] : [Buffer.from(JSON.stringify(payload))]);
+  req.method = method; req.headers = {}; req.socket = {};
+  return req;
+};
+const call = async (handler, method, path, payload) => {
+  let status, body; const headers = {};
+  const req = request(method, payload); req.url = path;
+  const res = { writeHead(code, values) { status = code; Object.assign(headers, values); }, setHeader(key, value) { headers[key] = value; }, end(data) { body = JSON.parse(data); } };
+  await handler(req, res, new URL(path, 'http://localhost'));
+  return { status, body, headers };
+};
 
-test('midnight Toronto is the exact automatic public-access boundary', () => {
-  assert.equal(new Date(MURAL_OPENS_AT).toISOString(), '2026-11-20T05:00:00.000Z');
-  assert.equal(muralAccessState(request(), {now:MURAL_OPENS_AT-1,secret}).authorized,false);
-  assert.equal(muralAccessState(request(), {now:MURAL_OPENS_AT,secret:''}).authorized,true);
-  assert.equal(muralAccessState(request(), {now:MURAL_OPENS_AT+1,secret:''}).requiresPassphrase,false);
+test('the mural is public before the birthday without a password, cookie or client clock', () => {
+  const now = Date.now;
+  Date.now = () => Date.parse('2026-11-16T00:00:00-05:00');
+  try {
+    const state = muralAccessState();
+    assert.equal(state.authorized, true);
+    assert.equal(state.requiresPassphrase, false);
+    assert.equal(state.configured, true);
+    assert.equal(state.opensAt, null);
+  } finally { Date.now = now; }
 });
-test('unset password fails closed before the birthday, not after it', () => {
-  assert.equal(muralAccessState(request(),{now:before,secret:''}).authorized,false);
-  assert.equal(authenticateMural(request(),'anything',{now:before,secret:''}).status,503);
-  assert.equal(authenticateMural(request(),'',{now:MURAL_OPENS_AT,secret:''}).authorized,true);
-});
-test('correct password grants an HttpOnly signed session, not a client-side password', () => {
-  const session=authenticateMural(request(),'unit-test-only-not-a-real-password',{now:before,secret});
-  assert.equal(session.status,200);
-  assert.match(session.cookie,/HttpOnly/);assert.match(session.cookie,/SameSite=Strict/);assert.match(session.cookie,/Path=\/api/);
-  assert.ok(!session.cookie.includes(secret));
-  assert.equal(muralAccessState(request(cookieFrom(session)),{now:before,secret}).authorized,true);
-});
-test('wrong passwords, forged cookies and a rotated secret do not authorize', () => {
-  assert.equal(authenticateMural(request('', 'wrong-client'),'bad',{now:before,secret}).status,401);
-  const session=authenticateMural(request(),secret,{now:before,secret});
-  assert.equal(muralAccessState(request(cookieFrom(session)+'tampered'),{now:before,secret}).authorized,false);
-  assert.equal(muralAccessState(request('noemi_mural_access=garbage'),{now:before,secret}).authorized,false);
-  assert.equal(muralAccessState(request(cookieFrom(session)),{now:before,secret:'rotated'}).authorized,false);
-});
-test('HTTPS cookies are secure and expire exactly when the password requirement ends', () => {
-  const httpsRequest={headers:{'x-forwarded-proto':'https','x-forwarded-for':'https-test'},socket:{}};
-  const session=authenticateMural(httpsRequest,secret,{now:before,secret});
-  assert.match(session.cookie,/; Secure$/);assert.match(session.cookie,/Max-Age=60/);
-  assert.match(session.cookie,/Expires=Fri, 20 Nov 2026 05:00:00 GMT/);
-});
-test('repeated wrong attempts are throttled and recover after one minute', () => {
-  const req=request('','throttle-client');
-  for(let i=0;i<8;i++)assert.equal(authenticateMural(req,'wrong',{now:before,secret}).status,401);
-  assert.equal(authenticateMural(req,secret,{now:before,secret}).status,429);
-  assert.equal(authenticateMural(req,secret,{now:before+60_001,secret}).status,200);
-});
-test('all note, upload and position endpoints are protected, not destination choice', () => {
-  for(const path of ['/api/messages','/api/messages/12/position','/api/prepare-image'])assert.equal(isMuralProtectedPath(path),true);
-  for(const path of ['/api/choice','/api/mural-access','/api/health'])assert.equal(isMuralProtectedPath(path),false);
-});
-test('actual API denies every mural operation before touching the database', async () => {
+
+test('legacy access endpoint is public and never issues password cookies', async () => {
   const { handleApi } = await import('../server/api.mjs');
-  const realNow = Date.now;
-  Date.now = () => before;
-  try {
-  for(const [method,path] of [['GET','/api/messages'],['POST','/api/messages'],['PATCH','/api/messages/1/position'],['POST','/api/prepare-image']]) {
-    const req=Readable.from([]);req.headers={};req.method=method;req.socket={};
-    let status,body;
-    await handleApi(req,{writeHead(value){status=value;},end(value){body=JSON.parse(value);}},new URL(path,'http://localhost'));
-    assert.equal(status,401);assert.equal(body.code,'MURAL_ACCESS_REQUIRED');
+  for (const method of ['GET', 'POST']) {
+    const result = await call(handleApi, method, '/api/mural-access');
+    assert.equal(result.status, 200);
+    assert.equal(result.body.authorized, true);
+    assert.equal(result.body.requiresPassphrase, false);
+    assert.equal(result.headers['set-cookie'], undefined);
+    assert.equal(result.headers['cache-control'], 'no-store');
   }
-  } finally { Date.now = realNow; }
 });
 
-test('Vercel access checks and protected denials also work without schema initialization', async () => {
-  const { invokeApi } = await import('../api/_shared.mjs');
-  const realNow = Date.now;
-  Date.now = () => before;
+test('anonymous clients can read, publish and move notes; uploads are no longer gated', async () => {
+  const { handleApi } = await import('../server/api.mjs');
+  const query = pg.Pool.prototype.query;
+  pg.Pool.prototype.query = async () => ({ rows: [{ id: 1, author: 'Invitada', message: 'Felicidades', note_x: 8, note_y: 8, note_position_height: 1080, created_at: new Date().toISOString() }] });
   try {
-    for (const path of ['/api/mural-access','/api/messages']) {
-      const req=Readable.from([]);req.headers={host:'localhost'};req.method='GET';req.url=path;req.socket={};
-      let status,body;
-      await invokeApi(req,{writeHead(value){status=value;},setHeader(){},end(value){body=JSON.parse(value);}},path);
-      assert.equal(status,path.endsWith('access')?200:401);
-      assert.equal(path.endsWith('access')?body.authorized:body.code,path.endsWith('access')?false:'MURAL_ACCESS_REQUIRED');
-    }
-  } finally { Date.now = realNow; }
+    assert.equal((await call(handleApi, 'GET', '/api/messages')).status, 200);
+    assert.equal((await call(handleApi, 'POST', '/api/messages', { author: 'Invitada', message: 'Felicidades', x: 8, y: 8 })).status, 201);
+    assert.equal((await call(handleApi, 'PATCH', '/api/messages/1/position', { x: 25, y: 35, positionHeight: 1700 })).status, 200);
+    assert.equal((await call(handleApi, 'POST', '/api/prepare-image')).status, 400, 'Empty upload is validated, not rejected by authentication');
+  } finally { pg.Pool.prototype.query = query; }
+});
+
+test('Vercel access-status compatibility works without database initialization', async () => {
+  const { invokeApi } = await import('../api/_shared.mjs');
+  const result = await call((req, res) => invokeApi(req, res, '/api/mural-access'), 'GET', '/api/mural-access');
+  assert.equal(result.status, 200);
+  assert.equal(result.body.authorized, true);
 });

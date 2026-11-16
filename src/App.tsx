@@ -1,7 +1,6 @@
 import type { ChangeEvent, FormEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import BirthdayHome from "./BirthdayHome";
-import MuralAccessGate from "./MuralAccessGate";
 import MuralNoteDesign from "./MuralNoteDesign";
 import { NOTE_COLORS, NOTE_DESIGNS, normalizeNoteAppearance } from "../shared/mural-appearance.mjs";
 import type { NoteColor, NoteDesign } from "../shared/mural-appearance.mjs";
@@ -34,6 +33,7 @@ type MuralMessage = {
   createdAt: string;
   x: number;
   y: number;
+  positionHeight: number;
   imageDataUrl: string | null;
   color: NoteColor;
   design: NoteDesign;
@@ -307,7 +307,7 @@ export default function App() {
   }
 
   if (route === "mural") {
-    return <MuralAccessGate language={language} onLanguageChange={setLanguage} onBack={() => navigate("/")}><MuralPage language={language} onLanguageChange={setLanguage} onNavigate={navigate} t={t} /></MuralAccessGate>;
+    return <MuralPage language={language} onLanguageChange={setLanguage} onNavigate={navigate} t={t} />;
   }
 
   return <BirthdayHome language={language} onLanguageChange={setLanguage} onNavigate={navigate} t={t} />;
@@ -353,7 +353,7 @@ function MuralPage({ language, onLanguageChange, onNavigate, t }: {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const versionsRef = useRef(new Map<number, number>());
   const positionQueueRef = useRef(new Map<number, Promise<void>>());
-  const confirmedPositionsRef = useRef(new Map<number, MuralPosition>());
+  const confirmedPositionsRef = useRef(new Map<number, MuralPosition & { positionHeight: number }>());
   const imageRequestRef = useRef(0);
   const dragStateRef = useRef<{
     id: number; pointerId: number; element: HTMLElement; handle: HTMLElement;
@@ -443,7 +443,7 @@ function MuralPage({ language, onLanguageChange, onNavigate, t }: {
     setSaving(true); setFeedback("");
     try {
       const response = await fetch("/api/messages", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ author: trimmedAuthor, message: trimmedNote, x: 8, y: 8, imageDataUrl, color: noteColor, design: noteDesign }) });
+        body: JSON.stringify({ author: trimmedAuthor, message: trimmedNote, x: 8, y: 8, positionHeight: layoutRef.current.height, imageDataUrl, color: noteColor, design: noteDesign }) });
       const data = await response.json() as { message?: MuralMessage };
       if (!response.ok || !data.message) throw new Error("Could not publish");
       setMessages(current => [normalizeMuralMessage(data.message!), ...current]);
@@ -521,21 +521,24 @@ function MuralPage({ language, onLanguageChange, onNavigate, t }: {
   }
 
   async function persistPosition(id: number, position: MuralPosition, previous: MuralPosition) {
+    const positionHeight = layoutRef.current.height;
+    const saved = { ...position, positionHeight };
     const version = (versionsRef.current.get(id) || 0) + 1;
     versionsRef.current.set(id, version);
-    if (!confirmedPositionsRef.current.has(id)) confirmedPositionsRef.current.set(id, previous);
+    if (!confirmedPositionsRef.current.has(id)) confirmedPositionsRef.current.set(id, { ...previous, positionHeight });
+    // Measurements during an in-flight save must use the optimistic position too.
+    setMessages(current => current.map(item => item.id === id ? { ...item, ...saved } : item));
     // Serialize this note's requests so a slower earlier move cannot overwrite a newer one.
     const pending = positionQueueRef.current.get(id) || Promise.resolve();
     const task = pending.then(async () => {
       try {
-        const response = await fetch(`/api/messages/${id}/position`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(position) });
+        const response = await fetch(`/api/messages/${id}/position`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(saved) });
         if (!response.ok) throw new Error("Position unavailable");
-        confirmedPositionsRef.current.set(id, position);
-        if (versionsRef.current.get(id) === version) setMessages(current => current.map(item => item.id === id ? { ...item, ...position } : item));
+        confirmedPositionsRef.current.set(id, saved);
       } catch {
         if (versionsRef.current.get(id) === version) {
-          const rollback = confirmedPositionsRef.current.get(id) || previous;
-          setLayout(current => ({ ...current, positions: { ...current.positions, [id]: rollback } }));
+          const rollback = confirmedPositionsRef.current.get(id) || { ...previous, positionHeight };
+          setLayout(current => ({ ...current, positions: { ...current.positions, [id]: { x: rollback.x, y: rollback.y * rollback.positionHeight / current.height } } }));
           setMessages(current => current.map(item => item.id === id ? { ...item, ...rollback } : item));
           setFeedback(es ? "No se guardó el movimiento. La nota volvió a su lugar; puedes reintentarlo." : "The move wasn't saved. The note returned to its place; please try again.");
         }
@@ -756,6 +759,7 @@ function normalizeMuralMessage(message: MuralMessage): MuralMessage {
     ...message,
     x: clamp(Number(message.x ?? 8), 0, 100),
     y: clamp(Number(message.y ?? 8), 0, 100),
+    positionHeight: clamp(Number(message.positionHeight ?? MURAL_CANVAS_MIN_HEIGHT), MURAL_CANVAS_MIN_HEIGHT, 1_000_000),
     imageDataUrl: message.imageDataUrl || null,
     ...normalizeNoteAppearance(message.color, message.design),
   };

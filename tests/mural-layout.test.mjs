@@ -52,3 +52,26 @@ test('shared canvas stays at its logical dimensions instead of collapsing to a m
   assert.deepEqual(reloaded,desktop);
   assert.ok(Math.abs(desktop.positions[2].x-55)<1e-9);
 });
+
+test('adding a longer note does not move existing notes in canvas pixels', () => {
+  const notes = Array.from({ length: 10 }, (_, id) => ({ id: id + 1, x: 8 + id % 5 * 17.75, y: id < 5 ? 5 : 50, height: 285 }));
+  const before = calculateMuralLayout(notes, 1600, 260, 1080);
+  const after = calculateMuralLayout([...notes, { id: 11, x: 8, y: 8, height: 900 }], 1600, 260, 1080);
+  for (const note of notes) {
+    assert.ok(Math.abs(before.positions[note.id].y * before.height - after.positions[note.id].y * after.height) < 0.001, `Note ${note.id} moved when another note was published`);
+    assert.equal(before.positions[note.id].x, after.positions[note.id].x);
+  }
+});
+
+test('growing the canvas preserves collision-resolved positions too', () => {
+  const notes = Array.from({ length: 16 }, (_, id) => ({ id, x: 8, y: 8, height: 280 }));
+  const before = calculateMuralLayout(notes, 1600, 260, 1080);
+  const after = calculateMuralLayout([...notes, { id: 17, x: 8, y: 8, height: 1300 }], 1600, 260, 1080);
+  for (const note of notes) assert.ok(Math.abs(before.positions[note.id].y * before.height - after.positions[note.id].y * after.height) < 0.001);
+});
+
+test('saved coordinates carry their own height and survive reload on a taller canvas', () => {
+  const notes = [{ id: 1, x: 50, y: 75, positionHeight: 2000, height: 300 }, { id: 2, x: 8, y: 8, height: 1400 }];
+  const result = calculateMuralLayout(notes, 1600, 260, 1080);
+  assert.ok(Math.abs(result.positions[1].y / 100 * result.height - 1500) < 0.001);
+});
