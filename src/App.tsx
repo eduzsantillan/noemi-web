@@ -593,10 +593,11 @@ function MuralPage({ language, onLanguageChange, onNavigate, t }: {
     <div className="mural-canvas-wrap">
       <div className="mural-canvas-viewport" ref={viewportRef} tabIndex={0} role="region" aria-label={es ? "Lienzo de notas desplazable" : "Scrollable note canvas"} onPointerDown={panCanvas} onPointerMove={moveCanvas} onPointerUp={endPan} onPointerCancel={endPan} onLostPointerCapture={endPan}>
         <div className="mural-notes mural-canvas" aria-busy={loading} ref={boardRef} style={{ width: MURAL_CANVAS_WIDTH, height: layout.height }}>
-          {messages.map((message, index) => <div className={`mural-note-shell ${draggingId === message.id ? "is-dragging" : ""}`} data-note-id={message.id} key={message.id} onPointerMove={dragNote} onPointerUp={event => endDrag(event)} onPointerCancel={event => endDrag(event, true)} onLostPointerCapture={event => endDrag(event, true)} style={{ left: `${layout.positions[message.id]?.x || 0}%`, top: `${layout.positions[message.id]?.y || 0}%`, visibility: layout.positions[message.id] ? "visible" : "hidden" }}>
+          {messages.map(message => <div className={`mural-note-shell ${draggingId === message.id ? "is-dragging" : ""}`} data-note-id={message.id} key={message.id} onPointerMove={dragNote} onPointerUp={event => endDrag(event)} onPointerCancel={event => endDrag(event, true)} onLostPointerCapture={event => endDrag(event, true)} style={{ left: `${layout.positions[message.id]?.x || 0}%`, top: `${layout.positions[message.id]?.y || 0}%`, visibility: layout.positions[message.id] ? "visible" : "hidden" }}>
             <article className="mural-note-body mural-paper" data-color={message.color} data-design={message.design} onPointerDown={event => startDrag(event, message)} aria-label={`${es ? "Nota de" : "Note from"} ${message.author}`}>
-              <button className="mural-drag-handle" type="button" aria-label={`${es ? "Mover nota de" : "Move note from"} ${message.author}`} aria-describedby="mural-move-hint" onKeyDown={event => moveWithKeyboard(event, message.id)} onKeyUp={finishKeyboardMove} onBlur={finishKeyboardMove}><span>{String(index + 1).padStart(2, "0")} / {es ? "PARA NOEMI" : "FOR NOEMI"}</span><svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="currentColor">{[5, 9, 13].flatMap(y => [6, 12].map(x => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.15" />))}</svg></button>
-              {message.design !== "plain" && <div className="mural-birthday-detail"><span aria-hidden="true">{es ? "UN DESEO PARA TI" : "A WISH FOR YOU"}</span><MuralNoteDesign design={message.design} /></div>}
+              <button className={`mural-drag-handle ${message.design === "plain" ? "mural-drag-handle-plain" : ""}`} type="button" aria-label={`${es ? "Mover nota de" : "Move note from"} ${message.author}`} aria-describedby="mural-move-hint" onKeyDown={event => moveWithKeyboard(event, message.id)} onKeyUp={finishKeyboardMove} onBlur={finishKeyboardMove}>
+                {message.design !== "plain" && <MuralNoteDesign design={message.design} />}
+              </button>
               {message.imageDataUrl && <div className="mural-note-photo"><img src={message.imageDataUrl} alt={es ? `Recuerdo compartido por ${message.author}` : `Memory shared by ${message.author}`} loading="lazy" draggable={false} /></div>}
               <p>{message.message}</p><footer><strong>{message.author}</strong><span>{muralCopy.noteDate(new Date(message.createdAt))}</span></footer>
             </article>
@@ -616,7 +617,7 @@ function MuralPage({ language, onLanguageChange, onNavigate, t }: {
           <label htmlFor="mural-author">{muralCopy.nameLabel}</label><input required autoComplete="name" id="mural-author" maxLength={80} value={author} onChange={event => setAuthor(event.target.value)} placeholder={muralCopy.namePlaceholder} disabled={saving} />
           <label htmlFor="mural-note">{muralCopy.messageLabel}</label>
           <div className="mural-draft-preview mural-paper" data-color={noteColor} data-design={noteDesign}>
-            <div className="mural-draft-heading" aria-hidden="true"><span>{es ? "PARA NOEMI, CON AMOR" : "FOR NOEMI, WITH LOVE"}</span>{noteDesign !== "plain" && <MuralNoteDesign design={noteDesign} />}</div>
+            {noteDesign !== "plain" && <div className="mural-draft-heading" aria-hidden="true"><MuralNoteDesign design={noteDesign} /></div>}
             <textarea required id="mural-note" maxLength={500} value={note} onChange={event => setNote(event.target.value)} placeholder={muralCopy.messagePlaceholder} rows={3} disabled={saving} />
           </div>
           <fieldset className="mural-appearance-picker" disabled={saving}>
